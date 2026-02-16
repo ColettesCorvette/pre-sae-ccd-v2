@@ -16,3 +16,6 @@ vendor/bundle/
 
 # OS
 .DS_Store
+
+# Sujet
+pre_ccd.pdf

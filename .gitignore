@@ -1,0 +1,18 @@
+# Secrets
+.env
+config/local.yml
+
+# Ruby
+*.gem
+Gemfile.lock
+vendor/bundle/
+.bundle/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*~
+
+# OS
+.DS_Store

@@ -417,11 +417,24 @@ Ce qu'on a mis en place côté sécurité :
 # Cloner le dépôt
 git clone git@github.com:ColettesCorvette/pre-sae-ccd.git
 cd pre-sae-ccd
+```
 
-# Installer les paquets système (Arch)
+Installer les paquets système selon la distro :
+
+```bash
+# Arch / Manjaro
 sudo pacman -S openldap ruby
 
-# Installer la gem LDAP
+# Debian / Ubuntu
+sudo apt install ldap-utils ruby
+
+# Fedora
+sudo dnf install openldap-clients ruby
+```
+
+Puis installer la gem LDAP :
+
+```bash
 gem install net-ldap
 ```
 

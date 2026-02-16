@@ -1,79 +1,71 @@
 #!/usr/bin/env ruby
-# Script de test de raccordement LDAP au serveur public forumsys
-# Serveur : ldap.forumsys.com:389 (LDAP non sécurisé)
+# Test de raccordement LDAP sur le serveur public forumsys
+# ldap.forumsys.com, port 389
 
 require "net/ldap"
 
-LDAP_HOST = "ldap.forumsys.com"
-LDAP_PORT = 389
-BASE_DN   = "dc=example,dc=com"
-BIND_DN   = "cn=read-only-admin,dc=example,dc=com"
-BIND_PASS = "password"
+# config du serveur de test
+host = "ldap.forumsys.com"
+port = 389
+base = "dc=example,dc=com"
 
-# --- Connexion et bind ---
-
+# on se connecte avec le compte admin en lecture seule
 ldap = Net::LDAP.new(
-  host: LDAP_HOST,
-  port: LDAP_PORT,
+  host: host,
+  port: port,
   auth: {
     method: :simple,
-    username: BIND_DN,
-    password: BIND_PASS
+    username: "cn=read-only-admin,dc=example,dc=com",
+    password: "password"
   }
 )
 
 if ldap.bind
-  puts "[OK] Bind réussi en tant que #{BIND_DN}"
+  puts "Bind OK avec le compte admin"
 else
-  puts "[ERREUR] Bind échoué : #{ldap.get_operation_result.message}"
+  puts "Erreur de bind : #{ldap.get_operation_result.message}"
   exit 1
 end
 
-# --- Recherche de toutes les entrées ---
+# on parcourt tout l'annuaire pour voir ce qu'il y a dedans
+puts "\n--- Contenu de l'annuaire ---\n\n"
 
-puts "\n=== Exploration de l'annuaire (Base DN : #{BASE_DN}) ===\n\n"
-
-ldap.search(base: BASE_DN, filter: Net::LDAP::Filter.eq("objectClass", "*")) do |entry|
+ldap.search(base: base, filter: Net::LDAP::Filter.eq("objectClass", "*")) do |entry|
   puts "DN: #{entry.dn}"
   entry.each do |attr, values|
     values.each { |v| puts "  #{attr}: #{v}" }
   end
-  puts "-" * 40
+  puts ""
 end
 
-# --- Recherche des utilisateurs (personnes) ---
+# on filtre pour n'avoir que les utilisateurs
+puts "--- Utilisateurs (objectClass=person) ---\n\n"
 
-puts "\n=== Liste des utilisateurs (objectClass=person) ===\n\n"
+filtre_users = Net::LDAP::Filter.eq("objectClass", "person")
 
-user_filter = Net::LDAP::Filter.eq("objectClass", "person")
-
-ldap.search(base: BASE_DN, filter: user_filter, attributes: %w[uid cn mail telephoneNumber]) do |entry|
-  puts "Utilisateur : #{entry[:cn].first}"
-  puts "  UID   : #{entry[:uid].first}" if entry[:uid].any?
-  puts "  Mail  : #{entry[:mail].first}" if entry[:mail].any?
-  puts "  Tél.  : #{entry[:telephoneNumber].first}" if entry[:telephoneNumber].any?
-  puts
+ldap.search(base: base, filter: filtre_users, attributes: ["uid", "cn", "mail", "telephoneNumber"]) do |entry|
+  puts "#{entry[:cn].first}"
+  puts "  uid  : #{entry[:uid].first}" if entry[:uid].any?
+  puts "  mail : #{entry[:mail].first}" if entry[:mail].any?
+  puts "  tel  : #{entry[:telephoneNumber].first}" if entry[:telephoneNumber].any?
+  puts ""
 end
 
-# --- Test d'authentification avec un utilisateur standard ---
+# on teste si on peut se bind avec un vrai utilisateur (einstein)
+puts "--- Test de bind avec einstein ---\n\n"
 
-puts "=== Test d'authentification utilisateur (Einstein) ===\n\n"
-
-user_dn   = "uid=einstein,dc=example,dc=com"
-user_pass  = "password"
-
-user_ldap = Net::LDAP.new(
-  host: LDAP_HOST,
-  port: LDAP_PORT,
+ldap_einstein = Net::LDAP.new(
+  host: host,
+  port: port,
   auth: {
     method: :simple,
-    username: user_dn,
-    password: user_pass
+    username: "uid=einstein,dc=example,dc=com",
+    password: "password"
   }
 )
 
-if user_ldap.bind
-  puts "[OK] Authentification réussie pour #{user_dn}"
+if ldap_einstein.bind
+  puts "Bind OK pour einstein"
 else
-  puts "[ERREUR] Authentification échouée pour #{user_dn} : #{user_ldap.get_operation_result.message}"
+  puts "Bind raté pour einstein : #{ldap_einstein.get_operation_result.message}"
 end

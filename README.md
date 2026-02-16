@@ -415,12 +415,14 @@ Ce qu'on a mis en place côté sécurité :
 
 ```bash
 # Cloner le dépôt
-git clone <url-du-depot>
-cd pre-sae-4
+git clone git@github.com:ColettesCorvette/pre-sae-ccd.git
+cd pre-sae-ccd
 
-# Installer les dépendances Ruby
-gem install bundler
-bundle install
+# Installer les paquets système (Arch)
+sudo pacman -S openldap ruby
+
+# Installer la gem LDAP
+gem install net-ldap
 ```
 
 ### Utilisation

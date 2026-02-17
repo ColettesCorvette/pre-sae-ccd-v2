@@ -33,7 +33,7 @@ serveurs.each do |srv|
     encryption: { method: :simple_tls },
     auth: {
       method: :simple,
-      username: "#{login}@univ-lorraine.fr",
+      username: "#{login}@etu.univ-lorraine.fr",
       password: password
     }
   )

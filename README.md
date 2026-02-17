@@ -340,7 +340,7 @@ Quelques points qu'on a relevés :
 
 - **Active Directory vs OpenLDAP** — L'UL tourne sur Active Directory (Microsoft), pas OpenLDAP. Du coup, les noms d'attributs ne sont pas les mêmes : on a `sAMAccountName` au lieu de `uid`, et `memberOf` pour les groupes.
 
-- **Format UPN pour le bind** — On ne se bind pas avec un DN complet comme sur forumsys. Ici on utilise le format `login@univ-lorraine.fr` (c'est ce qu'on appelle le User Principal Name). C'est une spécificité d'Active Directory.
+- **Format UPN pour le bind** — On ne se bind pas avec un DN complet comme sur forumsys. Ici on utilise le format `login@domaine` (c'est ce qu'on appelle le User Principal Name). C'est une spécificité d'Active Directory. Attention : pour les étudiants c'est `login@etu.univ-lorraine.fr`, pas `login@univ-lorraine.fr` (qui est réservé aux personnels). On a perdu du temps là-dessus avant de s'en rendre compte.
 
 - **LDAPS obligatoire** — Pas de LDAP en clair ici, tout passe en TLS sur le port 636. Côté Ruby, ça se traduit par `encryption: { method: :simple_tls }`.
 
@@ -350,7 +350,21 @@ Quelques points qu'on a relevés :
   - `GGA_STP_FHB–` → IUTNC
   - `GGA_STP_FHBAB` → Département Informatique
 
-### 3.2 Le script PoC
+- **Base DN étudiants vs personnels** — Le sujet donne le Base DN des personnels (`OU=Personnels,OU=_Utilisateurs,...`), mais les comptes étudiants n'y sont pas. On a dû élargir la recherche à `OU=_Utilisateurs,OU=UL,DC=ad,DC=univ-lorraine,DC=fr` pour trouver nos comptes. Le script essaie d'abord cette branche large, puis la branche personnels si rien n'est trouvé.
+
+### 3.2 Difficultés rencontrées
+
+En pratique, on a galéré sur plusieurs points avant d'arriver à un script fonctionnel :
+
+1. **Port 636 bloqué par le réseau** — Le LDAPS n'est accessible que depuis certains VLANs de l'IUT. En WiFi (eduroam) ou en partage de connexion, le port est filtré. Il a fallu demander l'ouverture du port pour le VLAN de notre salle de TP. On peut vérifier l'accès avec `nc -zv montet-dc1.ad.univ-lorraine.fr 636 -w 5`.
+
+2. **DNS interne** — Les noms `montet-dc1.ad.univ-lorraine.fr` et `montet-dc2.ad.univ-lorraine.fr` ne sont résolvables que par le DNS de l'UL. Depuis un réseau externe (4G, VPN type Tailscale), le nslookup échoue. Il faut être sur le réseau de l'UL avec le bon serveur DNS.
+
+3. **Domaine de bind étudiant** — Le sujet indique `login@univ-lorraine.fr` pour le bind, mais ça retourne `invalid credentials` pour un compte étudiant. Le bon format est `login@etu.univ-lorraine.fr`.
+
+4. **Base DN des étudiants** — La branche `OU=Personnels` ne contient pas les comptes étudiants. On a dû chercher plus haut dans l'arbre (`OU=_Utilisateurs`) pour trouver nos entrées.
+
+### 3.3 Le script PoC
 
 Le fichier `ldap_ul.rb` est un proof of concept de connexion au LDAP de l'UL. Voici comment il fonctionne :
 
@@ -375,10 +389,10 @@ Concrètement, le script :
 
 1. Récupère le login et le mot de passe depuis les variables d'environnement
 2. Tente un bind LDAPS sur `montet-dc1`, et bascule sur `montet-dc2` si ça échoue
-3. Recherche l'utilisateur par `sAMAccountName` dans la branche des personnels
-4. Affiche son nom, son mail, et son rattachement
+3. Recherche l'utilisateur par `sAMAccountName` (d'abord dans la branche étudiants, puis personnels)
+4. Affiche son DN, son nom, son mail, et son rattachement
 
-### 3.3 Gestion du mot de passe
+### 3.4 Gestion du mot de passe
 
 Le mot de passe UL est personnel — on ne doit **jamais** le retrouver dans le code source ou dans l'historique Git.
 

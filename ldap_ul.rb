@@ -19,7 +19,10 @@ serveurs = [
   "montet-dc2.ad.univ-lorraine.fr"
 ]
 
-base_dn = "OU=Personnels,OU=_Utilisateurs,OU=UL,DC=ad,DC=univ-lorraine,DC=fr"
+# base DN pour les étudiants (la branche Personnels ne contient pas les comptes étudiants)
+# si on ne trouve rien, on tente une recherche plus large pour trouver le bon Base DN
+base_dn_etudiants = "OU=_Utilisateurs,OU=UL,DC=ad,DC=univ-lorraine,DC=fr"
+base_dn_personnels = "OU=Personnels,OU=_Utilisateurs,OU=UL,DC=ad,DC=univ-lorraine,DC=fr"
 
 ldap = nil
 serveur_ok = nil
@@ -59,22 +62,34 @@ filtre = Net::LDAP::Filter.eq("sAMAccountName", qui)
 
 puts "\nRecherche de '#{qui}' dans l'annuaire...\n\n"
 
-ldap.search(base: base_dn, filter: filtre, attributes: ["cn", "mail", "memberOf", "sAMAccountName"]) do |entry|
-  puts "Nom   : #{entry[:cn].first}"
-  puts "Login : #{entry[:sAMAccountName].first}" if entry[:sAMAccountName].any?
-  puts "Mail  : #{entry[:mail].first}" if entry[:mail].any?
+# on cherche d'abord dans la branche étudiants (plus large), puis personnels si rien trouvé
+trouve = false
 
-  # on regarde les groupes pour trouver le rattachement
-  if entry[:memberOf].any?
-    entry[:memberOf].each do |groupe|
-      if groupe.include?("GGA_STP_FHBAB")
-        puts "Rattachement : Département Informatique"
-      elsif groupe.include?("GGA_STP_FHB")
-        puts "Rattachement : IUTNC"
+[base_dn_etudiants, base_dn_personnels].each do |base|
+  ldap.search(base: base, filter: filtre, attributes: ["cn", "mail", "memberOf", "sAMAccountName", "distinguishedName"]) do |entry|
+    trouve = true
+    puts "DN    : #{entry[:distinguishedName].first}" if entry[:distinguishedName].any?
+    puts "Nom   : #{entry[:cn].first}"
+    puts "Login : #{entry[:sAMAccountName].first}" if entry[:sAMAccountName].any?
+    puts "Mail  : #{entry[:mail].first}" if entry[:mail].any?
+
+    # on regarde les groupes pour trouver le rattachement
+    if entry[:memberOf].any?
+      entry[:memberOf].each do |groupe|
+        if groupe.include?("GGA_STP_FHBAB")
+          puts "Rattachement : Département Informatique"
+        elsif groupe.include?("GGA_STP_FHB")
+          puts "Rattachement : IUTNC"
+        end
       end
     end
+    puts ""
   end
-  puts ""
+  break if trouve
+end
+
+if !trouve
+  puts "Aucun résultat pour '#{qui}'."
 end
 
 puts "Recherche terminée (serveur : #{serveur_ok})"

@@ -9,7 +9,8 @@
 1. [Synthèse sur le protocole LDAP](#1-synthèse-sur-le-protocole-ldap)
 2. [Étape 1 — Raccordement au serveur de test](#2-étape-1--raccordement-au-serveur-de-test-forumsys)
 3. [Étape 2 — Raccordement au LDAP de l'Université de Lorraine](#3-étape-2--raccordement-au-ldap-de-luniversité-de-lorraine)
-4. [Instructions de déploiement et d'utilisation](#4-instructions-de-déploiement-et-dutilisation)
+4. [Étape 3 — Interface web PHP](#4-étape-3--interface-web-php)
+5. [Instructions de déploiement et d'utilisation](#5-instructions-de-déploiement-et-dutilisation)
 
 ---
 
@@ -420,20 +421,33 @@ Ce qu'on a mis en place côté sécurité :
 
 ### 4.1 Présentation
 
-Pour rendre le raccordement LDAP un peu plus concret, on a fait une petite interface web en PHP. C'est basique : un formulaire de login, et si ça passe on affiche les infos de l'utilisateur récupérées depuis l'annuaire.
+Pour l'étape 3, on a fait une interface web en PHP pour interroger l'annuaire LDAP via le navigateur. On a d'abord fait un premier prototype rapide (`index.php` + `auth.php` à la racine) pour valider que le raccordement LDAP fonctionnait bien en PHP. Ensuite on a fait une version plus propre dans `web-interface/` avec une config séparée, un mode test/production et du CSS.
 
-L'interface se compose de deux fichiers :
-- `index.php` — le formulaire de connexion (login + mot de passe)
-- `auth.php` — le traitement : bind LDAPS sur le serveur UL, recherche dans l'annuaire, affichage des résultats
+La version à la racine est juste le premier jet — la version finale c'est `web-interface/`.
 
-### 4.2 Fonctionnement
+### 4.2 Le premier prototype (racine)
+
+Les fichiers `index.php` et `auth.php` à la racine, c'est la toute première version qu'on a faite. C'est du PHP brut, pas de CSS, la config est en dur. Ça servait surtout à vérifier que `ldap_bind()` et `ldap_search()` fonctionnaient bien avec le serveur de l'UL avant de se lancer dans quelque chose de plus structuré.
+
+### 4.3 La version finale (web-interface/)
+
+C'est la version qu'on a gardée. La grosse différence c'est qu'on a séparé la config dans un fichier à part (`config.php`) et ajouté un **mode test/production**. On peut basculer entre le serveur de test forumsys et le vrai LDAP de l'UL en changeant une seule ligne :
+
+```php
+define('LDAP_MODE', 'test');  // ou 'ul' pour la prod
+```
+
+Le tout tient en 3 fichiers :
+- `config.php` — la config des deux modes (serveurs, ports, Base DN, attributs...)
+- `index.php` — tout en un : formulaire + traitement + affichage
+- `style.css` — la mise en forme
 
 ```
-┌──────────────┐    POST login/mdp    ┌──────────────┐    Bind LDAPS    ┌─────────────┐
-│              │ ──────────────────►   │              │ ──────────────►  │  LDAP UL    │
-│  index.php   │                      │   auth.php   │                  │  (port 636) │
-│  (formulaire)│                      │  (traitement)│  ◄──────────────  │             │
-│              │                      │              │    Résultats      └─────────────┘
+┌──────────────┐    POST login/mdp    ┌──────────────┐    Bind LDAP(S)   ┌─────────────┐
+│              │ ──────────────────►   │              │ ──────────────►   │  Serveur    │
+│  Formulaire  │                      │  index.php   │                   │  LDAP       │
+│  (login/mdp) │                      │  (traitement)│  ◄──────────────   │             │
+│              │                      │              │    Résultats       └─────────────┘
 └──────────────┘                      └──────────────┘
                                             │
                                             ▼
@@ -441,28 +455,20 @@ L'interface se compose de deux fichiers :
                                       mail, DN, rattachement
 ```
 
-Le script `auth.php` fait la même chose que le script Ruby `ldap_ul.rb`, mais depuis une page web :
-1. On récupère le login et le mot de passe envoyés par le formulaire
-2. On tente un bind LDAPS sur `montet-dc1`, puis `montet-dc2` si ça échoue
-3. On cherche l'utilisateur dans la branche étudiants, puis personnels
-4. On affiche les infos trouvées (nom, mail, DN, rattachement)
+En mode test, on peut se connecter avec `einstein` / `password` (ou tesla, newton, curie...). En mode `ul`, on utilise son login UL depuis le réseau de l'IUT.
 
-### 4.3 Lancer l'interface
-
-PHP a un serveur de dev intégré, pas besoin d'Apache ou Nginx pour tester :
-
+Pour lancer :
 ```bash
-php -S localhost:8080
+cd web-interface/
+php -S localhost:8000
 ```
-
-Puis ouvrir http://localhost:8080 dans le navigateur. Il faut bien sûr être sur le réseau de l'IUT (VLAN avec accès au port 636).
 
 ### 4.4 Sécurité
 
-Quelques points qu'on a pris en compte :
-- Le login est échappé avec `ldap_escape()` avant d'être injecté dans le filtre LDAP (sinon un utilisateur pourrait faire une injection LDAP)
-- Les valeurs affichées passent par `htmlspecialchars()` pour éviter du XSS
-- Le mot de passe n'est jamais stocké ni affiché, il sert uniquement au bind
+Quelques trucs qu'on a gérés :
+- Le login est échappé avec `ldap_escape()` avant d'être mis dans le filtre LDAP (pour éviter une injection LDAP)
+- Les valeurs affichées passent par `htmlspecialchars()` contre le XSS
+- Le mot de passe sert uniquement au bind, il n'est jamais stocké ni affiché
 
 ---
 
@@ -489,6 +495,8 @@ Installer les paquets système selon la distro :
 ```bash
 # Arch / Manjaro
 sudo pacman -S openldap ruby php
+# Sur Arch, l'extension LDAP est dans le paquet php mais désactivée.
+# Décommenter "extension=ldap" dans /etc/php/php.ini
 
 # Debian / Ubuntu
 sudo apt install ldap-utils ruby php php-ldap
@@ -533,13 +541,17 @@ ruby ldap_ul.rb
 ruby ldap_ul.rb autre.login
 ```
 
-**Étape 3 — Interface web PHP (depuis le réseau UL) :**
+**Étape 3 — Interface web PHP :**
 
 ```bash
-# Lancer le serveur PHP de dev
-php -S localhost:8080
+cd web-interface/
 
-# Ouvrir http://localhost:8080 dans le navigateur
+# Mode test (par défaut, marche partout)
+php -S localhost:8000
+# -> login : einstein, mdp : password
+
+# Mode UL (modifier LDAP_MODE dans config.php, depuis le réseau IUT)
+php -S localhost:8000
 ```
 
 ### Structure du dépôt
@@ -551,6 +563,11 @@ pre-sae-4/
 ├── .gitignore           # Fichiers exclus du versioning
 ├── ldap_forumsys.rb     # Étape 1 : script serveur de test
 ├── ldap_ul.rb           # Étape 2 : script PoC LDAP UL
-├── index.php            # Étape 3 : formulaire de connexion
-└── auth.php             # Étape 3 : traitement LDAP + affichage
+├── index.php            # Étape 3 (version simple) : formulaire
+├── auth.php             # Étape 3 (version simple) : traitement
+└── web-interface/       # Étape 3 (version complète)
+    ├── README.md        # Doc spécifique à l'interface
+    ├── config.php       # Config test/production
+    ├── index.php        # Formulaire + traitement + affichage
+    └── style.css        # Mise en forme
 ```

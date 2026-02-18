@@ -8,20 +8,18 @@ Interface PHP pour rechercher des utilisateurs dans l'annuaire LDAP.
 
 ### PHP + extension LDAP
 
-**macOS (Homebrew) :**
+**Arch / Manjaro :**
 ```bash
-brew install php
+sudo pacman -S php
 ```
-> L'extension `ldap` est incluse automatiquement.
+L'extension LDAP est incluse dans le paquet `php` mais désactivée par défaut. Pour l'activer, décommenter la ligne suivante dans `/etc/php/php.ini` :
+```ini
+extension=ldap
+```
 
 **Debian / Ubuntu :**
 ```bash
 sudo apt install php php-ldap
-```
-
-**Arch / Manjaro :**
-```bash
-sudo pacman -S php php-ldap
 ```
 
 **Fedora :**
@@ -51,15 +49,15 @@ Ouvrir **http://localhost:8000** dans un navigateur.
 
 ## Mode test / Mode production
 
-Le mode se configure dans **`config.php`**, à la ligne :
+Le mode se configure dans **`config.php`** :
 
 ```php
-define('LDAP_MODE', 'test');
+define('LDAP_MODE', 'test');  // ou 'ul'
 ```
 
 | Mode | Valeur | Serveur | Réseau requis |
 |------|--------|---------|---------------|
-| **Test** | `'test'` | `ldap.forumsys.com` (public) | Aucun — marche partout |
+| **Test** | `'test'` | `ldap.forumsys.com` (public) | Aucun |
 | **Production** | `'ul'` | LDAPS Université de Lorraine | Réseau IUT obligatoire |
 
 ### Mode test (par défaut)
@@ -75,13 +73,13 @@ Utilise le serveur public forumsys. Comptes disponibles :
 
 ### Mode production
 
-Pour basculer en production, modifier `config.php` :
+Modifier `config.php` :
 
 ```diff
 - define('LDAP_MODE', 'test');
 + define('LDAP_MODE', 'ul');
 ```
 
-- Login = votre identifiant UL (ex: `prenom.nom`)
-- Mot de passe = votre mot de passe UL
-- **Nécessite d'être sur le réseau de l'IUT** (le port 636 est filtré ailleurs)
+- Login = identifiant UL (ex : `fuchs54u`)
+- Mot de passe = mot de passe UL
+- Nécessite d'être sur le réseau de l'IUT (port 636 filtré ailleurs)

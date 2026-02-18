@@ -1,19 +1,15 @@
 <?php
-/**
- * Configuration LDAP — Mode test (forumsys) ou production (UL)
- *
- * Pour basculer entre les modes :
- *   - 'test' → serveur public forumsys (marche partout, sans VPN)
- *   - 'ul'   → LDAP UL (nécessite le réseau de l'IUT)
- */
+// Configuration LDAP
+// Pour changer de mode : mettre 'test' ou 'ul'
+//   - test : serveur public forumsys (marche partout)
+//   - ul   : LDAP de l'UL (nécessite le réseau de l'IUT)
 
 define('LDAP_MODE', 'test');
 
 $LDAP_CONFIGS = [
 
-    // ── MODE TEST ──────────────────────────────────────────────
-    // Serveur public forumsys, pas de chiffrement
-    // Comptes dispo : einstein, tesla, newton, etc. (mdp : password)
+    // serveur public forumsys, pas de chiffrement
+    // comptes dispo : einstein, tesla, newton, etc. (mdp : password)
     'test' => [
         'name'              => 'Serveur de test (forumsys)',
         'servers'           => ['ldap.forumsys.com'],
@@ -26,9 +22,8 @@ $LDAP_CONFIGS = [
         'rattachement_groups' => [],
     ],
 
-    // ── MODE PRODUCTION (UL) ───────────────────────────────────
     // LDAPS sur le réseau de l'Université de Lorraine
-    // Deux serveurs avec failover automatique
+    // deux serveurs avec failover
     'ul' => [
         'name'              => 'LDAP Université de Lorraine',
         'servers'           => [
@@ -51,9 +46,6 @@ $LDAP_CONFIGS = [
     ],
 ];
 
-/**
- * Retourne la configuration du mode actif.
- */
 function get_config(): array {
     global $LDAP_CONFIGS;
     return $LDAP_CONFIGS[LDAP_MODE];

@@ -431,10 +431,14 @@ Les fichiers `index.php` et `auth.php` à la racine, c'est la toute première ve
 
 ### 4.3 La version finale (web-interface/)
 
-C'est la version qu'on a gardée. La grosse différence c'est qu'on a séparé la config dans un fichier à part (`config.php`) et ajouté un **mode test/production**. On peut basculer entre le serveur de test forumsys et le vrai LDAP de l'UL en changeant une seule ligne :
+C'est la version qu'on a gardée. La grosse différence c'est qu'on a séparé la config dans un fichier à part (`config.php`) et ajouté un **mode test/production**. On peut basculer entre le serveur de test forumsys et le vrai LDAP de l'UL via une variable d'environnement au lancement :
 
-```php
-define('LDAP_MODE', 'test');  // ou 'ul' pour la prod
+```bash
+# mode test (par défaut)
+php -S localhost:8000
+
+# mode UL
+LDAP_MODE=ul php -S localhost:8000
 ```
 
 Le tout tient en 3 fichiers :
@@ -550,8 +554,8 @@ cd web-interface/
 php -S localhost:8000
 # -> login : einstein, mdp : password
 
-# Mode UL (modifier LDAP_MODE dans config.php, depuis le réseau IUT)
-php -S localhost:8000
+# Mode UL (depuis le réseau IUT)
+LDAP_MODE=ul php -S localhost:8000
 ```
 
 ### Structure du dépôt

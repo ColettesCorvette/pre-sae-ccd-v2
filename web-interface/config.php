@@ -1,10 +1,11 @@
 <?php
 // Configuration LDAP
-// Pour changer de mode : mettre 'test' ou 'ul'
-//   - test : serveur public forumsys (marche partout)
-//   - ul   : LDAP de l'UL (nécessite le réseau de l'IUT)
+// On peut choisir le mode via la variable d'environnement LDAP_MODE :
+//   LDAP_MODE=test php -S localhost:8000   (serveur forumsys, par défaut)
+//   LDAP_MODE=ul php -S localhost:8000     (LDAP UL, réseau IUT)
 
-define('LDAP_MODE', 'test');
+$mode = getenv('LDAP_MODE') ?: 'test';
+define('LDAP_MODE', $mode);
 
 $LDAP_CONFIGS = [
 

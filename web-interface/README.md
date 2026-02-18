@@ -40,7 +40,12 @@ php -m | grep ldap  # Doit afficher "ldap"
 
 ```bash
 cd web-interface/
+
+# Mode test (par défaut)
 php -S localhost:8000
+
+# Mode production (LDAP UL, depuis le réseau IUT)
+LDAP_MODE=ul php -S localhost:8000
 ```
 
 Ouvrir **http://localhost:8000** dans un navigateur.
@@ -49,11 +54,7 @@ Ouvrir **http://localhost:8000** dans un navigateur.
 
 ## Mode test / Mode production
 
-Le mode se configure dans **`config.php`** :
-
-```php
-define('LDAP_MODE', 'test');  // ou 'ul'
-```
+Le mode se choisit via la variable d'environnement `LDAP_MODE` au lancement. Par défaut c'est `test`.
 
 | Mode | Valeur | Serveur | Réseau requis |
 |------|--------|---------|---------------|
@@ -73,11 +74,8 @@ Utilise le serveur public forumsys. Comptes disponibles :
 
 ### Mode production
 
-Modifier `config.php` :
-
-```diff
-- define('LDAP_MODE', 'test');
-+ define('LDAP_MODE', 'ul');
+```bash
+LDAP_MODE=ul php -S localhost:8000
 ```
 
 - Login = identifiant UL (ex : `fuchs54u`)

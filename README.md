@@ -348,7 +348,7 @@ Quelques points qu'on a relevés :
 - **Deux serveurs (failover)** — L'UL fournit deux serveurs (`montet-dc1` et `montet-dc2`). On a implémenté un failover dans le script : si le premier ne répond pas, on essaie le second.
 
 - **Rattachement structurel** — Pour savoir à quelle structure quelqu'un est rattaché, on regarde l'attribut `memberOf` et on cherche certains motifs :
-  - `GGA_STP_FHB–` → IUTNC
+  - `GGA_STP_FHB–` → IUT Nancy-Charlemagne
   - `GGA_STP_FHBAB` → Département Informatique
 
 - **Base DN étudiants vs personnels** — Le sujet donne le Base DN des personnels (`OU=Personnels,OU=_Utilisateurs,...`), mais les comptes étudiants n'y sont pas. On a dû élargir la recherche à `OU=_Utilisateurs,OU=UL,DC=ad,DC=univ-lorraine,DC=fr` pour trouver nos comptes. Le script essaie d'abord cette branche large, puis la branche personnels si rien n'est trouvé.
@@ -427,7 +427,7 @@ La version à la racine est juste le premier jet — la version finale c'est `we
 
 ### 4.2 Le premier prototype (racine)
 
-Les fichiers `index.php` et `auth.php` à la racine, c'est la toute première version qu'on a faite. C'est du PHP brut, pas de CSS, la config est en dur. Ça servait surtout à vérifier que `ldap_bind()` et `ldap_search()` fonctionnaient bien avec le serveur de l'UL avant de se lancer dans quelque chose de plus structuré.
+Les fichiers `index.php` et `auth.php` à la racine, c'est la toute première version qu'on a faite. C'est du PHP brut, pas de CSS, la config du LDAP UL est en dur dans le code. Ça servait surtout à vérifier que `ldap_bind()` et `ldap_search()` fonctionnaient bien en PHP avant de se lancer dans quelque chose de plus structuré.
 
 ### 4.3 La version finale (web-interface/)
 

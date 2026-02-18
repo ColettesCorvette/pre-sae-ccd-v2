@@ -70,7 +70,7 @@ foreach ([$base_dn_etudiants, $base_dn_personnels] as $base) {
                     if (strpos($group, "GGA_STP_FHBAB") !== false) {
                         echo "<p><b>Rattachement :</b> Département Informatique</p>";
                     } elseif (strpos($group, "GGA_STP_FHB") !== false) {
-                        echo "<p><b>Rattachement :</b> IUTNC</p>";
+                        echo "<p><b>Rattachement :</b> IUT Nancy-Charlemagne</p>";
                     }
                 }
             }

@@ -242,7 +242,7 @@ sudo dnf install php-ldap</pre>
     <div class="help-text">
         <?php if ($mode === 'test'): ?>
             Mode test — serveur <code>ldap.forumsys.com</code><br>
-            Pour passer en production : modifier <code>LDAP_MODE</code> dans <code>config.php</code>
+            Pour passer en production : <code>LDAP_MODE=ul php -S localhost:8000</code>
         <?php else: ?>
             Connexion LDAPS vers l'annuaire de l'Université de Lorraine<br>
             Nécessite d'être sur le réseau de l'IUT

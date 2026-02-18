@@ -79,7 +79,7 @@ trouve = false
         if groupe.include?("GGA_STP_FHBAB")
           puts "Rattachement : Département Informatique"
         elsif groupe.include?("GGA_STP_FHB")
-          puts "Rattachement : IUTNC"
+          puts "Rattachement : IUT Nancy-Charlemagne"
         end
       end
     end

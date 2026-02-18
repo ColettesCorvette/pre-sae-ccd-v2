@@ -416,12 +416,63 @@ Ce qu'on a mis en place côté sécurité :
 
 ---
 
-## 4. Instructions de déploiement et d'utilisation
+## 4. Étape 3 — Interface web PHP
+
+### 4.1 Présentation
+
+Pour rendre le raccordement LDAP un peu plus concret, on a fait une petite interface web en PHP. C'est basique : un formulaire de login, et si ça passe on affiche les infos de l'utilisateur récupérées depuis l'annuaire.
+
+L'interface se compose de deux fichiers :
+- `index.php` — le formulaire de connexion (login + mot de passe)
+- `auth.php` — le traitement : bind LDAPS sur le serveur UL, recherche dans l'annuaire, affichage des résultats
+
+### 4.2 Fonctionnement
+
+```
+┌──────────────┐    POST login/mdp    ┌──────────────┐    Bind LDAPS    ┌─────────────┐
+│              │ ──────────────────►   │              │ ──────────────►  │  LDAP UL    │
+│  index.php   │                      │   auth.php   │                  │  (port 636) │
+│  (formulaire)│                      │  (traitement)│  ◄──────────────  │             │
+│              │                      │              │    Résultats      └─────────────┘
+└──────────────┘                      └──────────────┘
+                                            │
+                                            ▼
+                                      Affiche : nom, login,
+                                      mail, DN, rattachement
+```
+
+Le script `auth.php` fait la même chose que le script Ruby `ldap_ul.rb`, mais depuis une page web :
+1. On récupère le login et le mot de passe envoyés par le formulaire
+2. On tente un bind LDAPS sur `montet-dc1`, puis `montet-dc2` si ça échoue
+3. On cherche l'utilisateur dans la branche étudiants, puis personnels
+4. On affiche les infos trouvées (nom, mail, DN, rattachement)
+
+### 4.3 Lancer l'interface
+
+PHP a un serveur de dev intégré, pas besoin d'Apache ou Nginx pour tester :
+
+```bash
+php -S localhost:8080
+```
+
+Puis ouvrir http://localhost:8080 dans le navigateur. Il faut bien sûr être sur le réseau de l'IUT (VLAN avec accès au port 636).
+
+### 4.4 Sécurité
+
+Quelques points qu'on a pris en compte :
+- Le login est échappé avec `ldap_escape()` avant d'être injecté dans le filtre LDAP (sinon un utilisateur pourrait faire une injection LDAP)
+- Les valeurs affichées passent par `htmlspecialchars()` pour éviter du XSS
+- Le mot de passe n'est jamais stocké ni affiché, il sert uniquement au bind
+
+---
+
+## 5. Instructions de déploiement et d'utilisation
 
 ### Prérequis
 
 - Linux (obligatoire pour ce projet)
 - Ruby >= 3.0
+- PHP >= 8.0 avec l'extension `ldap`
 - OpenLDAP (`openldap` sur Arch, `ldap-utils` sur Debian/Ubuntu) pour `ldapsearch`
 - Un accès réseau au serveur ciblé
 
@@ -429,21 +480,21 @@ Ce qu'on a mis en place côté sécurité :
 
 ```bash
 # Cloner le dépôt
-git clone git@github.com:ColettesCorvette/pre-sae-ccd.git
-cd pre-sae-ccd
+git clone git@github.com:ColettesCorvette/pre-sae-ccd-v2.git
+cd pre-sae-ccd-v2
 ```
 
 Installer les paquets système selon la distro :
 
 ```bash
 # Arch / Manjaro
-sudo pacman -S openldap ruby
+sudo pacman -S openldap ruby php
 
 # Debian / Ubuntu
-sudo apt install ldap-utils ruby
+sudo apt install ldap-utils ruby php php-ldap
 
 # Fedora
-sudo dnf install openldap-clients ruby
+sudo dnf install openldap-clients ruby php php-ldap
 ```
 
 Puis installer la gem LDAP :
@@ -482,6 +533,15 @@ ruby ldap_ul.rb
 ruby ldap_ul.rb autre.login
 ```
 
+**Étape 3 — Interface web PHP (depuis le réseau UL) :**
+
+```bash
+# Lancer le serveur PHP de dev
+php -S localhost:8080
+
+# Ouvrir http://localhost:8080 dans le navigateur
+```
+
 ### Structure du dépôt
 
 ```
@@ -490,5 +550,7 @@ pre-sae-4/
 ├── Gemfile              # Dépendances Ruby
 ├── .gitignore           # Fichiers exclus du versioning
 ├── ldap_forumsys.rb     # Étape 1 : script serveur de test
-└── ldap_ul.rb           # Étape 2 : script PoC LDAP UL
+├── ldap_ul.rb           # Étape 2 : script PoC LDAP UL
+├── index.php            # Étape 3 : formulaire de connexion
+└── auth.php             # Étape 3 : traitement LDAP + affichage
 ```

@@ -21,8 +21,10 @@ services:
       # - LDAP_DISPLAY_NAME_ATTRIBUTE=displayName
       # - LDAP_VERSION=3
       # - LDAP_TLS_INSECURE=true
+      # - LDAP_TLS_CA_CERT=/config/www/ul-ca.crt
     volumes:
       - bookstack_data:/config
+      - ./ul-ca.crt:/config/www/ul-ca.crt
     ports:
       - 6875:80
     depends_on:

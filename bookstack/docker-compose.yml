@@ -1,0 +1,46 @@
+services:
+  bookstack:
+    image: lscr.io/linuxserver/bookstack
+    container_name: bookstack
+    environment:
+      - APP_URL=${APP_URL}
+      - DB_HOST=mariadb
+      - DB_USERNAME=${DB_USER}
+      - DB_PASSWORD=${DB_PASS}
+      - DB_DATABASE=${DB_DATABASE}
+      - APP_KEY=${APP_KEY}
+      # LDAP — décommenter pour le raccordement UL (étape 4)
+      # - AUTH_METHOD=ldap
+      # - LDAP_SERVER=ldaps://montet-dc1.ad.univ-lorraine.fr:636
+      # - LDAP_BASE_DN=OU=Personnels,OU=_Utilisateurs,OU=UL,DC=ad,DC=univ-lorraine,DC=fr
+      # - LDAP_DN=${LDAP_DN}
+      # - LDAP_PASS=${LDAP_PASS}
+      # - LDAP_USER_FILTER=(&(objectClass=user)(sAMAccountName=$${input}))
+      # - LDAP_ID_ATTRIBUTE=objectGUID
+      # - LDAP_EMAIL_ATTRIBUTE=mail
+      # - LDAP_DISPLAY_NAME_ATTRIBUTE=displayName
+      # - LDAP_VERSION=3
+      # - LDAP_TLS_INSECURE=true
+    volumes:
+      - bookstack_data:/config
+    ports:
+      - 6875:80
+    depends_on:
+      - mariadb
+    restart: unless-stopped
+
+  mariadb:
+    image: mariadb:latest
+    container_name: bookstack_db
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASS}
+      - MYSQL_DATABASE=${DB_DATABASE}
+      - MYSQL_USER=${DB_USER}
+      - MYSQL_PASSWORD=${DB_PASS}
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    restart: unless-stopped
+
+volumes:
+  bookstack_data:
+  mariadb_data:

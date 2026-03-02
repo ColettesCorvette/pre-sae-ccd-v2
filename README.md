@@ -9,8 +9,9 @@
 1. [Synthèse sur le protocole LDAP](#1-synthèse-sur-le-protocole-ldap)
 2. [Étape 1 — Raccordement au serveur de test](#2-étape-1--raccordement-au-serveur-de-test-forumsys)
 3. [Étape 2 — Raccordement au LDAP de l'Université de Lorraine](#3-étape-2--raccordement-au-ldap-de-luniversité-de-lorraine)
-4. [Étape 3 — Interface web PHP](#4-étape-3--interface-web-php)
-5. [Instructions de déploiement et d'utilisation](#5-instructions-de-déploiement-et-dutilisation)
+4. [Étape intermédiaire — Interface web PHP](#4-étape-intermédiaire--interface-web-php)
+5. [Étape 3 — Déploiement de BookStack](#5-étape-3--déploiement-de-bookstack)
+6. [Instructions de déploiement et d'utilisation](#6-instructions-de-déploiement-et-dutilisation)
 
 ---
 
@@ -417,7 +418,7 @@ Ce qu'on a mis en place côté sécurité :
 
 ---
 
-## 4. Étape 3 — Interface web PHP
+## 4. Étape intermédiaire — Interface web PHP
 
 ### 4.1 Présentation
 
@@ -476,7 +477,52 @@ Quelques trucs qu'on a gérés :
 
 ---
 
-## 5. Instructions de déploiement et d'utilisation
+## 5. Étape 3 — Déploiement de BookStack
+
+### 5.1 Présentation
+
+L'application retenue est **BookStack**, une plateforme de wiki et documentation en PHP/Laravel. Elle supporte nativement l'authentification LDAP entièrement par variables d'environnement, sans toucher au code source.
+
+On la déploie via Docker : un conteneur BookStack + un conteneur MariaDB, orchestrés avec `docker compose`. La config LDAP pour le raccordement à l'UL fait l'objet d'une étape séparée.
+
+### 5.2 Déploiement de la pile
+
+Le fichier `bookstack/docker-compose.yml` lance les deux services. Il faut d'abord créer le `.env` :
+
+```bash
+cd bookstack/
+cp .env.example .env
+# Renseigner APP_KEY, DB_USER, DB_PASS, DB_ROOT_PASS dans .env
+docker compose up -d
+```
+
+L'interface est accessible sur `http://localhost:6875`. Identifiants par défaut : `admin@admin.com` / `password` — à changer immédiatement.
+
+Pour générer la clé d'application `APP_KEY` :
+
+```bash
+docker run --rm --entrypoint /bin/bash lscr.io/linuxserver/bookstack:latest appkey
+```
+
+La valeur retournée (`base64:...`) est à copier dans `APP_KEY` du `.env`.
+
+### 5.3 Difficultés rencontrées
+
+1. **Modules noyau manquants** — Docker ne pouvait pas créer les interfaces réseau virtuelles (`veth`). Il a fallu charger les modules manuellement et redémarrer Docker :
+
+   ```bash
+   sudo modprobe veth
+   sudo modprobe br_netfilter
+   sudo systemctl restart docker
+   ```
+
+2. **APP_KEY manquante** — BookStack refuse de démarrer sans clé d'application. Ce n'est pas documenté de manière évidente, mais les logs du conteneur l'indiquent clairement avec la commande pour la générer.
+
+3. **Mauvais noms de variables pour la base de données** — On a passé `DB_USER` et `DB_PASS` comme indiqué dans la doc de l'image, mais Laravel attend `DB_USERNAME` et `DB_PASSWORD`. L'init script de l'image linuxserver ne substitue rien dans le `.env` interne — il laisse Laravel lire les variables du process directement. On s'en est rendu compte en inspectant le script d'init dans le conteneur (`/etc/s6-overlay/s6-rc.d/init-bookstack-config/run`).
+
+---
+
+## 6. Instructions de déploiement et d'utilisation
 
 ### Prérequis
 
@@ -567,11 +613,14 @@ pre-sae-4/
 ├── .gitignore           # Fichiers exclus du versioning
 ├── ldap_forumsys.rb     # Étape 1 : script serveur de test
 ├── ldap_ul.rb           # Étape 2 : script PoC LDAP UL
-├── index.php            # Étape 3 (version simple) : formulaire
-├── auth.php             # Étape 3 (version simple) : traitement
-└── web-interface/       # Étape 3 (version complète)
-    ├── README.md        # Doc spécifique à l'interface
-    ├── config.php       # Config test/production
-    ├── index.php        # Formulaire + traitement + affichage
-    └── style.css        # Mise en forme
+├── index.php            # Intermédiaire (version simple) : formulaire
+├── auth.php             # Intermédiaire (version simple) : traitement
+├── web-interface/       # Intermédiaire (version complète)
+│   ├── README.md        # Doc spécifique à l'interface
+│   ├── config.php       # Config test/production
+│   ├── index.php        # Formulaire + traitement + affichage
+│   └── style.css        # Mise en forme
+└── bookstack/           # Étape 3 : déploiement BookStack
+    ├── docker-compose.yml
+    └── .env.example
 ```

@@ -506,7 +506,12 @@ docker run --rm --entrypoint /bin/bash lscr.io/linuxserver/bookstack:latest appk
 
 La valeur retournée (`base64:...`) est à copier dans `APP_KEY` du `.env`.
 
-### 5.3 Difficultés rencontrées
+### 5.3 Résultat
+
+![Interface BookStack avec espace, livre et page de test](bookstack/screenshot.png)
+file:///home/thomas/pre-sae-4/bookstack/bookstack.png
+
+### 5.4 Difficultés rencontrées
 
 1. **Modules noyau manquants** — Docker ne pouvait pas créer les interfaces réseau virtuelles (`veth`). Il a fallu charger les modules manuellement et redémarrer Docker :
 
@@ -519,6 +524,33 @@ La valeur retournée (`base64:...`) est à copier dans `APP_KEY` du `.env`.
 2. **APP_KEY manquante** — BookStack refuse de démarrer sans clé d'application. Ce n'est pas documenté de manière évidente, mais les logs du conteneur l'indiquent clairement avec la commande pour la générer.
 
 3. **Mauvais noms de variables pour la base de données** — On a passé `DB_USER` et `DB_PASS` comme indiqué dans la doc de l'image, mais Laravel attend `DB_USERNAME` et `DB_PASSWORD`. L'init script de l'image linuxserver ne substitue rien dans le `.env` interne — il laisse Laravel lire les variables du process directement. On s'en est rendu compte en inspectant le script d'init dans le conteneur (`/etc/s6-overlay/s6-rc.d/init-bookstack-config/run`).
+
+### 5.5 Certificat TLS
+
+Pour se connecter au LDAP de l'UL en LDAPS, BookStack doit faire confiance au certificat du serveur. On vérifie d'abord la chaîne avec :
+
+```bash
+openssl s_client -connect montet-dc1.ad.univ-lorraine.fr:636
+```
+
+La chaîne obtenue est la suivante :
+
+```
+depth=2  HARICA TLS RSA Root CA 2021  (racine)
+depth=1  GEANT TLS RSA 1              (intermédiaire)
+depth=0  nancy-dc2.ad.univ-lorraine.fr (serveur)
+```
+
+Bonne nouvelle : ce n'est pas une CA interne à l'UL — c'est HARICA/GEANT, une autorité de certification académique publique reconnue. La vérification retourne `Verify return code: 0 (ok)`, ce qui veut dire que le certificat est déjà considéré valide par le système.
+
+Pour extraire le certificat et le placer dans `bookstack/` :
+
+```bash
+openssl s_client -connect montet-dc1.ad.univ-lorraine.fr:636 \
+  </dev/null 2>/dev/null | openssl x509 -out bookstack/ul-ca.crt
+```
+
+Le fichier `ul-ca.crt` est monté dans le conteneur via le volume défini dans `docker-compose.yml`. La variable `LDAP_TLS_CA_CERT` pointe vers son emplacement à l'intérieur du conteneur.
 
 ---
 

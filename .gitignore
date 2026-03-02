@@ -22,3 +22,6 @@ pre_ccd.pdf
 
 #certificat TLS
 *.crt
+
+#img
+*.png

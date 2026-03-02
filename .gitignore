@@ -19,3 +19,6 @@ vendor/bundle/
 
 # Sujet
 pre_ccd.pdf
+
+#certificat TLS
+*.crt

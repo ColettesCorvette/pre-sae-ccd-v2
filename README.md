@@ -508,8 +508,7 @@ La valeur retournée (`base64:...`) est à copier dans `APP_KEY` du `.env`.
 
 ### 5.3 Résultat
 
-![Interface BookStack avec espace, livre et page de test](bookstack/screenshot.png)
-file:///home/thomas/pre-sae-4/bookstack/bookstack.png
+![Interface BookStack avec espace, livre et page de test](bookstack/bookstack.png)
 
 ### 5.4 Difficultés rencontrées
 

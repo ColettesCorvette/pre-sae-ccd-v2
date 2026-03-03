@@ -556,86 +556,67 @@ Le fichier `ul-ca.crt` est monté dans le conteneur via le volume défini dans `
 
 ## 6. Étape 4 — Raccordement LDAP dans BookStack
 
-### 6.1 Présentation
+### 6.1 Ce qu'on fait
 
-L'étape 4 consiste à raccorder BookStack (déployé à l'étape 3) à l'annuaire LDAP de l'Université de Lorraine, afin que les utilisateurs puissent se connecter avec leurs identifiants UL. La configuration se fait entièrement par variables d'environnement — aucune modification du code source de BookStack n'est nécessaire.
+Une fois BookStack déployé, on le raccorde au LDAP de l'UL pour que les utilisateurs se connectent avec leurs identifiants universitaires. Ça se configure entièrement par variables d'environnement dans `docker-compose.yml` — pas de code à toucher.
 
-BookStack est une application PHP/Laravel qui supporte nativement l'authentification LDAP via la variable `AUTH_METHOD=ldap`. Quand cette variable est activée, BookStack délègue entièrement l'authentification au serveur LDAP : il tente un bind avec les credentials saisis, et si le bind réussit, l'utilisateur est connecté (et son profil est créé automatiquement s'il n'existait pas).
+Un point important : dès que `AUTH_METHOD=ldap` est activé, BookStack désactive complètement le login par email/mot de passe, **y compris pour le compte admin**. Si le LDAP n'est pas joignable ou mal configuré, plus personne ne peut accéder à l'interface. Il faut donc s'assurer que la connexion LDAP fonctionne avant d'activer cette option.
 
 ### 6.2 Configuration
 
-La configuration LDAP se fait dans `bookstack/docker-compose.yml`, via des variables d'environnement lues depuis le fichier `.env` (non versionné).
+Les variables LDAP sont déjà renseignées dans `docker-compose.yml`. Il suffit d'ajouter `LDAP_DN` et `LDAP_PASS` dans le `.env` :
 
-**Variables configurées :**
+```bash
+# Étudiant
+LDAP_DN=votre_login@etu.univ-lorraine.fr
+# Personnel
+LDAP_DN=votre_login@univ-lorraine.fr
 
-| Variable | Valeur | Explication |
+LDAP_PASS=   # mot de passe UL, jamais commité
+```
+
+Le tableau ci-dessous explique les choix faits pour chaque variable :
+
+| Variable | Valeur | Pourquoi |
 |---|---|---|
-| `AUTH_METHOD` | `ldap` | Active l'authentification LDAP à la place du login local |
+| `AUTH_METHOD` | `ldap` | Bascule BookStack en mode LDAP |
 | `LDAP_SERVER` | `ldaps://montet-dc1.ad.univ-lorraine.fr:636` | Serveur AD de l'UL en LDAPS |
-| `LDAP_BASE_DN` | `OU=_Utilisateurs,OU=UL,DC=ad,DC=univ-lorraine,DC=fr` | Branche large couvrant étudiants **et** personnels |
-| `LDAP_DN` | `login@etu.univ-lorraine.fr` | Format UPN pour le bind (spécificité Active Directory) |
-| `LDAP_PASS` | *(variable d'env, non versionnée)* | Mot de passe pour le bind initial |
-| `LDAP_USER_FILTER` | `(&(objectClass=user)(sAMAccountName=${input}))` | Filtre : l'utilisateur saisit son `sAMAccountName` (login UL) |
-| `LDAP_ID_ATTRIBUTE` | `objectGUID` | Identifiant unique et stable dans Active Directory |
-| `LDAP_EMAIL_ATTRIBUTE` | `mail` | Attribut AD contenant l'adresse mail |
-| `LDAP_DISPLAY_NAME_ATTRIBUTE` | `displayName` | Attribut AD contenant le nom complet affiché |
-| `LDAP_VERSION` | `3` | Version du protocole LDAP |
-| `LDAP_TLS_CA_CERT` | `/config/www/ul-ca.crt` | Chemin du certificat CA dans le conteneur |
+| `LDAP_BASE_DN` | `OU=_Utilisateurs,OU=UL,DC=ad,DC=univ-lorraine,DC=fr` | Branche large qui couvre étudiants et personnels (voir étape 2) |
+| `LDAP_DN` | `login@etu.univ-lorraine.fr` | Format UPN — spécificité Active Directory |
+| `LDAP_USER_FILTER` | `(&(objectClass=user)(sAMAccountName=${input}))` | L'utilisateur saisit son login UL (la partie avant le @) |
+| `LDAP_ID_ATTRIBUTE` | `objectGUID` | Identifiant stable dans AD — évite les doublons si un login change |
+| `LDAP_EMAIL_ATTRIBUTE` | `mail` | Récupère le mail UL pour le profil BookStack |
+| `LDAP_DISPLAY_NAME_ATTRIBUTE` | `displayName` | Nom affiché dans l'interface |
+| `LDAP_TLS_CA_CERT` | `/config/www/ul-ca.crt` | Chemin du certificat CA à l'intérieur du conteneur |
 
-**Contenu du `.env` à créer localement (ne jamais commiter) :**
+### 6.3 Certificat TLS
 
-```bash
-APP_URL=http://localhost:6875
-APP_KEY=base64:...   # généré préalablement
+Voir section 5.5 pour l'extraction du certificat. Il est monté dans le conteneur via `./ul-ca.crt:/config/www/ul-ca.crt` dans les volumes du service `bookstack`.
 
-DB_USER=bookstack
-DB_PASS=changeme
-DB_ROOT_PASS=rootchangeme
-DB_DATABASE=bookstack
-
-# Compte UL (étudiant : @etu.univ-lorraine.fr / personnel : @univ-lorraine.fr)
-LDAP_DN=e79277u@etu.univ-lorraine.fr
-LDAP_PASS=mon_mot_de_passe_ul   # jamais commité
-```
-
-### 6.3 Génération du certificat TLS
-
-Les serveurs LDAP de l'UL utilisent LDAPS (port 636). Le certificat est signé par la chaîne HARICA/GEANT — une autorité de certification académique publique. Le code retour `Verify return code: 0 (ok)` confirme que la chaîne est reconnue par défaut.
-
-On extrait le certificat serveur et on le place dans `bookstack/ul-ca.crt` (monté dans le conteneur) :
-
-```bash
-# Depuis le réseau filaire de l'IUT (port 636 inaccessible depuis eduroam)
-openssl s_client -connect montet-dc1.ad.univ-lorraine.fr:636 \
-  </dev/null 2>/dev/null | openssl x509 -out bookstack/ul-ca.crt
-```
-
-### 6.4 Lancement et test
+### 6.4 Lancement
 
 ```bash
 cd bookstack/
 
-# Vérifier la connectivité réseau (nécessite le réseau filaire IUT)
+# Vérifier la connectivité (réseau filaire IUT requis)
 nc -zv montet-dc1.ad.univ-lorraine.fr 636 -w 5
 
-# Relancer la pile avec la config LDAP active
+# Relancer la pile
 docker compose down && docker compose up -d
-
-# Suivre les logs pour détecter des erreurs LDAP
 docker compose logs -f bookstack
 ```
 
-Pour se connecter : ouvrir `http://localhost:6875` et saisir le **login UL** (ex : `e79277u`, sans le `@`) et le mot de passe UL correspondant.
+Pour se connecter : ouvrir `http://localhost:6875` et saisir son **login UL** (la partie avant le @) et son mot de passe UL. BookStack crée automatiquement le profil avec le nom et le mail récupérés depuis l'annuaire.
 
 ### 6.5 Difficultés rencontrées
 
-1. **Port 636 filtré depuis eduroam** — Le port LDAPS (636) n'est accessible que depuis le réseau filaire de l'IUT (certains VLANs). Depuis le WiFi eduroam ou un partage de connexion, les connexions vers `montet-dc1` et `montet-dc2` sont en timeout. Il faut être branché en RJ45 dans une salle TP.
+1. **AUTH_METHOD=ldap bloque le compte admin** — Une fois activé, le login admin par email ne fonctionne plus. Si le LDAP est indisponible ou mal configuré, l'accès est totalement impossible. On a galéré là-dessus en oubliant de relancer la pile après avoir renseigné les credentials LDAP.
 
-2. **Base DN des étudiants** — La documentation officielle du sujet indique `OU=Personnels` comme Base DN, mais les comptes étudiants ne s'y trouvent pas. On a dû élargir à `OU=_Utilisateurs,OU=UL,DC=ad,DC=univ-lorraine,DC=fr` pour couvrir les deux catégories. C'est cohérent avec ce qui avait été découvert à l'étape 2 pour le script Ruby.
+2. **Base DN des étudiants** — Le sujet donne `OU=Personnels` comme Base DN, mais les comptes étudiants ne s'y trouvent pas — même constat qu'à l'étape 2. On a utilisé `OU=_Utilisateurs` à la place.
 
-3. **Format UPN pour le bind** — L'Active Directory de l'UL attend le format UPN pour le bind : `login@etu.univ-lorraine.fr` pour les étudiants (et non un DN classique `cn=...,dc=...`). C'est différent du serveur de test forumsys où on utilise un DN complet.
+3. **Format UPN pour le bind** — L'AD de l'UL attend `login@etu.univ-lorraine.fr` pour le bind, pas un DN classique `cn=...,dc=...` comme sur forumsys.
 
-4. **`$${input}` dans le YAML** — La variable `LDAP_USER_FILTER` utilise `${input}` comme placeholder BookStack. Dans un `docker-compose.yml`, il faut l'écrire `$${input}` pour que Docker n'essaie pas de l'interpoler comme une variable d'environnement.
+4. **`$${input}` dans le YAML** — `${input}` est un placeholder interne à BookStack. Dans un `docker-compose.yml`, il faut l'écrire `$${input}` pour que Docker ne cherche pas à le résoudre comme une variable d'environnement.
 
 ---
 
@@ -746,14 +727,14 @@ openssl s_client -connect montet-dc1.ad.univ-lorraine.fr:636 \
   </dev/null 2>/dev/null | openssl x509 -out ul-ca.crt
 
 # 3. Renseigner dans .env :
-#    LDAP_DN=e79277u@etu.univ-lorraine.fr  (étudiant)
+#    LDAP_DN=votre_login@etu.univ-lorraine.fr  (étudiant)
 #    LDAP_PASS=votre_mot_de_passe_ul
 
 # 4. Relancer la pile
 docker compose down && docker compose up -d
 
 # 5. Se connecter sur http://localhost:6875
-#    Login : e79277u (sans le @), mot de passe UL
+#    Login : votre_login (sans le @), mot de passe UL
 ```
 
 ### Structure du dépôt

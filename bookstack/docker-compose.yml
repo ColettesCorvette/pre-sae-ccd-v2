@@ -9,19 +9,21 @@ services:
       - DB_PASSWORD=${DB_PASS}
       - DB_DATABASE=${DB_DATABASE}
       - APP_KEY=${APP_KEY}
-      # LDAP — décommenter pour le raccordement UL (étape 4)
-      # - AUTH_METHOD=ldap
-      # - LDAP_SERVER=ldaps://montet-dc1.ad.univ-lorraine.fr:636
-      # - LDAP_BASE_DN=OU=Personnels,OU=_Utilisateurs,OU=UL,DC=ad,DC=univ-lorraine,DC=fr
-      # - LDAP_DN=${LDAP_DN}
-      # - LDAP_PASS=${LDAP_PASS}
-      # - LDAP_USER_FILTER=(&(objectClass=user)(sAMAccountName=$${input}))
-      # - LDAP_ID_ATTRIBUTE=objectGUID
-      # - LDAP_EMAIL_ATTRIBUTE=mail
-      # - LDAP_DISPLAY_NAME_ATTRIBUTE=displayName
-      # - LDAP_VERSION=3
-      # - LDAP_TLS_INSECURE=true
-      # - LDAP_TLS_CA_CERT=/config/www/ul-ca.crt
+      # LDAP — raccordement au LDAP de l'Université de Lorraine (étape 4)
+      - AUTH_METHOD=ldap
+      - LDAP_SERVER=ldaps://montet-dc1.ad.univ-lorraine.fr:636
+      # Base DN élargi pour couvrir les comptes étudiants (OU=Personnels ne contient que les personnels)
+      - LDAP_BASE_DN=OU=_Utilisateurs,OU=UL,DC=ad,DC=univ-lorraine,DC=fr
+      # LDAP_DN au format UPN : login@etu.univ-lorraine.fr pour les étudiants, login@univ-lorraine.fr pour les personnels
+      - LDAP_DN=${LDAP_DN}
+      - LDAP_PASS=${LDAP_PASS}
+      # $${input} : le double $$ est nécessaire pour échapper le $ dans docker-compose
+      - LDAP_USER_FILTER=(&(objectClass=user)(sAMAccountName=$${input}))
+      - LDAP_ID_ATTRIBUTE=objectGUID
+      - LDAP_EMAIL_ATTRIBUTE=mail
+      - LDAP_DISPLAY_NAME_ATTRIBUTE=displayName
+      - LDAP_VERSION=3
+      - LDAP_TLS_CA_CERT=/config/www/ul-ca.crt
     volumes:
       - bookstack_data:/config
       - ./ul-ca.crt:/config/www/ul-ca.crt

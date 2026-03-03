@@ -587,7 +587,7 @@ Le tableau ci-dessous explique les choix faits pour chaque variable :
 | `LDAP_ID_ATTRIBUTE` | `objectGUID` | Identifiant stable dans AD — évite les doublons si un login change |
 | `LDAP_EMAIL_ATTRIBUTE` | `mail` | Récupère le mail UL pour le profil BookStack |
 | `LDAP_DISPLAY_NAME_ATTRIBUTE` | `displayName` | Nom affiché dans l'interface |
-| `LDAP_TLS_CA_CERT` | `/config/www/ul-ca.crt` | Chemin du certificat CA à l'intérieur du conteneur |
+| `LDAP_TLS_CA_CERT` | `/config/ul-ca.crt` | Chemin du certificat CA à l'intérieur du conteneur |
 
 ### 6.3 Certificat TLS
 

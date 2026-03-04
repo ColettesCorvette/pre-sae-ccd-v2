@@ -12,7 +12,8 @@
 4. [Étape intermédiaire — Interface web PHP](#4-étape-intermédiaire--interface-web-php)
 5. [Étape 3 — Déploiement de BookStack](#5-étape-3--déploiement-de-bookstack)
 6. [Étape 4 — Raccordement LDAP dans BookStack](#6-étape-4--raccordement-ldap-dans-bookstack)
-7. [Instructions de déploiement et d'utilisation](#7-instructions-de-déploiement-et-dutilisation)
+7. [Étape 5 (bonus) — Filtrage par appartenance et gestion des rôles](#7-étape-5-bonus--filtrage-par-appartenance-et-gestion-des-rôles)
+8. [Instructions de déploiement et d'utilisation](#8-instructions-de-déploiement-et-dutilisation)
 
 ---
 
@@ -645,39 +646,57 @@ Pour se connecter : ouvrir `http://localhost:6875` et saisir son **login UL** (l
 6. **Logs Laravel introuvables** — Le débogage a été compliqué par le fait que les logs de l'application ne se trouvent pas dans `/config/log/bookstack/` comme on pourrait s'y attendre avec l'image linuxserver. Le fichier `/var/www/bookstack/storage/logs/laravel.log` existe comme symlink mais pointe vers une cible inexistante, ce qui fait que les erreurs Laravel sont silencieusement perdues. On a dû s'appuyer sur `LDAP_DUMP_USER_DETAILS=true` (qui affiche les données LDAP directement dans le navigateur) pour avancer.
 
 ---
-7. Étape 5 (Bonus) — Filtrage et gestion des rôles
-7.1 Objectif du bonus
 
-L'objectif est d'automatiser la gestion des accès : au lieu de donner des droits manuellement dans BookStack, l'application lit les groupes de l'utilisateur dans l'annuaire de l'UL et lui attribue le rôle correspondant (ex: "Département informatique"). On ajoute aussi un filtre de sécurité pour que seuls les membres de ce département puissent se connecter.
-7.2 Configuration du filtrage par groupe
+## 7. Étape 5 (bonus) — Filtrage par appartenance et gestion des rôles
 
-Pour restreindre l'accès aux seuls membres du groupe informatique (GGA_STP_FHBAB), on modifie le filtre LDAP dans le docker-compose.yml.
+### 7.1 Objectif
 
-Le filtre complet :
-- LDAP_USER_FILTER=(&(objectClass=user)(sAMAccountName=$${user})(memberOf=CN=GGA_STP_FHBAB,OU=Groupes,DC=ad,DC=univ-lorraine,DC=fr))
-7.3 Synchronisation automatique des rôles
+L'idée c'est d'automatiser la gestion des accès : plutôt que d'attribuer des droits manuellement dans BookStack, l'application lit les groupes de l'utilisateur dans l'annuaire de l'UL et lui attribue le rôle correspondant. On ajoute aussi un filtre pour restreindre les connexions aux seuls étudiants de l'IUTNC.
 
-Pour que BookStack fasse le lien entre l'annuaire et ses propres rôles, on active la synchronisation :
+### 7.2 Filtrage par groupe
 
-    Variables d'environnement :
+On restreint l'accès aux étudiants de l'IUTNC en ajoutant une condition `memberOf` dans le filtre LDAP du `docker-compose.yml` :
 
-        LDAP_USER_TO_GROUPS=true : Active la lecture des groupes.
+```yaml
+- LDAP_USER_FILTER=(&(objectClass=user)(sAMAccountName=$${user})(memberOf=CN=GGA_GR_app_info_infra_vpn_iutnc-etudiants,OU=UDLGroup,OU=_Groupes,OU=UL,DC=ad,DC=univ-lorraine,DC=fr))
+```
 
-        LDAP_GROUP_ATTRIBUTE=memberOf : Indique l'attribut Active Directory contenant les groupes.
+Le groupe `GGA_GR_app_info_infra_vpn_iutnc-etudiants` identifie les étudiants de l'IUTNC dans l'annuaire de l'UL (découvert via `ldapsearch`, voir section 7.4).
 
-    Configuration dans l'interface BookStack :
-    Dans Paramètres > Rôles > Département informatique, un nouveau champ apparaît : "External Authentication IDs". On y colle le DN complet du groupe récupéré via notre script Ruby :
-    CN=GGA_STP_FHBAB,OU=Groupes,DC=ad,DC=univ-lorraine,DC=fr
+### 7.3 Synchronisation automatique des rôles
 
-7.4 Difficultés rencontrées
+Pour que BookStack lise les groupes LDAP et attribue automatiquement les rôles :
 
- Verrouillage de l'administration en mode LDAP Dès que l'option AUTH_METHOD=ldap est activée, BookStack désactive l'authentification standard. Nous nous sommes retrouvés "à la porte" de notre propre application car le compte admin@admin.com ne fonctionnait plus et aucun compte LDAP n'avait encore les droits d'administration.
+```yaml
+- LDAP_USER_TO_GROUPS=true
+- LDAP_GROUP_ATTRIBUTE=memberOf
+```
 
-    Solution : Nous avons dû désactiver temporairement le LDAP pour promouvoir un compte utilisateur UL au rang d'administrateur
+Côté interface : dans **Paramètres > Rôles**, créer un rôle "Étudiants IUTNC" et renseigner le champ *External Authentication IDs* avec le DN complet du groupe :
 
-Échec du filtrage restrictif par groupe (memberOf) Pour l'étape 5 (Bonus), nous avons tenté de restreindre l'accès aux seuls membres du département informatique via l'attribut memberOf. Cependant, nos tests ont montré que pour de nombreux comptes étudiants, cet attribut n'est pas retourné par le serveur LDAP de l'UL lors de la requête de bind.
+```
+CN=GGA_GR_app_info_infra_vpn_iutnc-etudiants,OU=UDLGroup,OU=_Groupes,OU=UL,DC=ad,DC=univ-lorraine,DC=fr
+```
 
-    Conséquence : Le filtre (memberOf=CN=GGA_STP_FHBAB...) rejetait systématiquement la connexion, même pour des utilisateurs légitimes. Nous avons dû laisser un filtre plus large pour garantir l'accès, tout en documentant la syntaxe théorique du filtrage par groupe.
+À la prochaine connexion, le rôle est attribué automatiquement.
+
+### 7.4 Difficultés rencontrées
+
+1. **Verrouillage de l'administration** — Avec `AUTH_METHOD=ldap` activé, le compte `admin@admin.com` ne fonctionne plus. On s'est retrouvés sans accès car aucun compte LDAP n'avait encore les droits admin. Il a fallu désactiver temporairement le LDAP, promouvoir un compte UL au rang d'administrateur, puis réactiver.
+
+2. **Mauvais groupe dans le sujet pour les comptes étudiants** — Le sujet indique `GGA_STP_FHBAB` (Département Informatique), mais ce groupe ne contient que les personnels — les étudiants n'en font pas partie. On a utilisé `ldapsearch` pour inspecter l'attribut `memberOf` de notre compte étudiant et identifier le bon groupe :
+
+   ```bash
+   ldapsearch -x -H ldaps://montet-dc1.ad.univ-lorraine.fr:636 \
+     -o tls_reqcert=never \
+     -D "fuchs54u@etu.univ-lorraine.fr" \
+     -W \
+     -b "CN=fuchs54u,OU=f,OU=Etudiants,OU=_Utilisateurs,OU=UL,DC=ad,DC=univ-lorraine,DC=fr" \
+     -s base "(objectClass=*)" memberOf
+   ```
+
+   Le groupe `GGA_GR_app_info_infra_vpn_iutnc-etudiants` est apparu dans les résultats — c'est lui qui identifie les étudiants de l'IUTNC.
+
 ---
 
 ## 8. Instructions de déploiement et d'utilisation
@@ -750,7 +769,7 @@ ruby ldap_ul.rb
 ruby ldap_ul.rb autre.login
 ```
 
-**Étape 3 — Interface web PHP :**
+**Étape intermédiaire — Interface web PHP :**
 
 ```bash
 cd web-interface/
@@ -799,6 +818,21 @@ docker compose down && docker compose up -d
 #    Login : votre_login (sans le @), mot de passe UL
 ```
 
+**Étape 5 (bonus) — Filtrage par appartenance et gestion des rôles :**
+
+```bash
+cd bookstack/
+
+# 1. Relancer la pile avec le filtre memberOf activé
+docker compose down && docker compose up -d
+
+# 2. Dans BookStack : Paramètres > Rôles > Créer un rôle "Étudiants IUTNC"
+#    External Authentication IDs :
+#    CN=GGA_GR_app_info_infra_vpn_iutnc-etudiants,OU=UDLGroup,OU=_Groupes,OU=UL,DC=ad,DC=univ-lorraine,DC=fr
+
+# 3. Se connecter avec son login UL — le rôle est attribué automatiquement
+```
+
 ### Structure du dépôt
 
 ```
@@ -815,9 +849,11 @@ pre-sae-ccd-v2/
 │   ├── config.php       # Config test/production
 │   ├── index.php        # Formulaire + traitement + affichage
 │   └── style.css        # Mise en forme
-└── bookstack/           # Étapes 3 & 4 : déploiement BookStack + LDAP UL
+└── bookstack/           # Étapes 3, 4 & 5 : déploiement BookStack + LDAP UL + bonus
     ├── docker-compose.yml
     ├── .env.example
-    └── ul-ca.crt        # Certificat TLS (généré localement, non versionné)
+    ├── bookstack.png        # Capture interface BookStack
+    ├── infos-annuaire.png   # Capture profil après connexion LDAP
+    └── ul-ca.crt            # Certificat TLS (généré localement, non versionné)
 ```
 

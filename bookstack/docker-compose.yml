@@ -17,7 +17,7 @@ services:
       # LDAP_DN au format UPN : login@etu.univ-lorraine.fr pour les étudiants, login@univ-lorraine.fr pour les personnels
       - LDAP_DN=${LDAP_DN}
       - LDAP_PASS=${LDAP_PASS}
-      # $${input} : le double $$ est nécessaire pour échapper le $ dans docker-compose
+      # {user} est le placeholder BookStack pour le login saisi. Le $$ est nécessaire pour échapper le $ dans docker-compose
       - LDAP_USER_FILTER=(&(objectClass=user)(sAMAccountName=$${user}))
       - LDAP_ID_ATTRIBUTE=sAMAccountName
       - LDAP_EMAIL_ATTRIBUTE=mail

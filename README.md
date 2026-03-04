@@ -628,8 +628,42 @@ Pour se connecter : ouvrir `http://localhost:6875` et saisir son **login UL** (l
 6. **Logs Laravel introuvables** — Le débogage a été compliqué par le fait que les logs de l'application ne se trouvent pas dans `/config/log/bookstack/` comme on pourrait s'y attendre avec l'image linuxserver. Le fichier `/var/www/bookstack/storage/logs/laravel.log` existe comme symlink mais pointe vers une cible inexistante, ce qui fait que les erreurs Laravel sont silencieusement perdues. On a dû s'appuyer sur `LDAP_DUMP_USER_DETAILS=true` (qui affiche les données LDAP directement dans le navigateur) pour avancer.
 
 ---
+7. Étape 5 (Bonus) — Filtrage et gestion des rôles
+7.1 Objectif du bonus
 
-## 7. Instructions de déploiement et d'utilisation
+L'objectif est d'automatiser la gestion des accès : au lieu de donner des droits manuellement dans BookStack, l'application lit les groupes de l'utilisateur dans l'annuaire de l'UL et lui attribue le rôle correspondant (ex: "Département informatique"). On ajoute aussi un filtre de sécurité pour que seuls les membres de ce département puissent se connecter.
+7.2 Configuration du filtrage par groupe
+
+Pour restreindre l'accès aux seuls membres du groupe informatique (GGA_STP_FHBAB), on modifie le filtre LDAP dans le docker-compose.yml.
+
+Le filtre complet :
+- LDAP_USER_FILTER=(&(objectClass=user)(sAMAccountName=$${user})(memberOf=CN=GGA_STP_FHBAB,OU=Groupes,DC=ad,DC=univ-lorraine,DC=fr))
+7.3 Synchronisation automatique des rôles
+
+Pour que BookStack fasse le lien entre l'annuaire et ses propres rôles, on active la synchronisation :
+
+    Variables d'environnement :
+
+        LDAP_USER_TO_GROUPS=true : Active la lecture des groupes.
+
+        LDAP_GROUP_ATTRIBUTE=memberOf : Indique l'attribut Active Directory contenant les groupes.
+
+    Configuration dans l'interface BookStack :
+    Dans Paramètres > Rôles > Département informatique, un nouveau champ apparaît : "External Authentication IDs". On y colle le DN complet du groupe récupéré via notre script Ruby :
+    CN=GGA_STP_FHBAB,OU=Groupes,DC=ad,DC=univ-lorraine,DC=fr
+
+7.4 Difficultés rencontrées
+
+ Verrouillage de l'administration en mode LDAP Dès que l'option AUTH_METHOD=ldap est activée, BookStack désactive l'authentification standard. Nous nous sommes retrouvés "à la porte" de notre propre application car le compte admin@admin.com ne fonctionnait plus et aucun compte LDAP n'avait encore les droits d'administration.
+
+    Solution : Nous avons dû désactiver temporairement le LDAP pour promouvoir un compte utilisateur UL au rang d'administrateur
+
+Échec du filtrage restrictif par groupe (memberOf) Pour l'étape 5 (Bonus), nous avons tenté de restreindre l'accès aux seuls membres du département informatique via l'attribut memberOf. Cependant, nos tests ont montré que pour de nombreux comptes étudiants, cet attribut n'est pas retourné par le serveur LDAP de l'UL lors de la requête de bind.
+
+    Conséquence : Le filtre (memberOf=CN=GGA_STP_FHBAB...) rejetait systématiquement la connexion, même pour des utilisateurs légitimes. Nous avons dû laisser un filtre plus large pour garantir l'accès, tout en documentant la syntaxe théorique du filtrage par groupe.
+---
+
+## 8. Instructions de déploiement et d'utilisation
 
 
 ### Prérequis

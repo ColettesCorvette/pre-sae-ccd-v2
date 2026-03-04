@@ -18,7 +18,7 @@ services:
       - LDAP_DN=${LDAP_DN}
       - LDAP_PASS=${LDAP_PASS}
       # $${input} : le double $$ est nécessaire pour échapper le $ dans docker-compose
-      - LDAP_USER_FILTER=(&(objectClass=user)(sAMAccountName=$${input}))
+      - LDAP_USER_FILTER=(&(objectClass=user)(sAMAccountName={user}))
       - LDAP_ID_ATTRIBUTE=sAMAccountName
       - LDAP_EMAIL_ATTRIBUTE=mail
       - LDAP_DISPLAY_NAME_ATTRIBUTE=displayName

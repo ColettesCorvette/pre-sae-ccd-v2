@@ -26,7 +26,6 @@ services:
       - LDAP_DISPLAY_NAME_ATTRIBUTE=displayName
       - LDAP_VERSION=3
       - LDAP_TLS_CA_CERT=/config/ul-ca.crt
-     # - LDAP_TLS_INSECURE=true
      # - LDAP_DUMP_USER_DETAILS=true
       - APP_DEBUG=true
     volumes:

@@ -555,20 +555,17 @@ depth=0  nancy-dc2.ad.univ-lorraine.fr (serveur)
 
 Bonne nouvelle : ce n'est pas une CA interne à l'UL — c'est HARICA/GEANT, une autorité de certification académique publique reconnue. La vérification retourne `Verify return code: 0 (ok)`, ce qui veut dire que le certificat est déjà considéré valide par le système.
 
-Pour extraire automatiquement le CA racine (dernier bloc de la chaîne) et l'écrire directement dans le fichier :
+Le serveur de l'UL n'envoie pas le certificat racine dans la chaîne TLS — il envoie uniquement le certificat serveur et l'intermédiaire GEANT. Le conteneur linuxserver ne contenant pas HARICA dans son bundle de confiance, il faut fournir le CA racine manuellement.
+
+La solution est de télécharger le certificat **HARICA TLS RSA Root CA 2021** (`HARICA-TLS-Root-2021-RSA.pem`) depuis le site de HARICA (harica.gr) et de le copier dans `bookstack/ul-ca.crt` :
 
 ```bash
-openssl s_client -connect montet-dc1.ad.univ-lorraine.fr:636 \
-  -showcerts </dev/null 2>/dev/null \
-  | awk '/-----BEGIN CERTIFICATE-----/{s=$0; next} s{s=s"\n"$0} /-----END CERTIFICATE-----/{last=s} END{print last}' \
-  > bookstack/ul-ca.crt
+cp HARICA-TLS-Root-2021-RSA.pem bookstack/ul-ca.crt
 ```
 
-La commande affiche toute la chaîne (serveur → intermédiaires → racine). Le `awk` isole chaque bloc et conserve le dernier, qui correspond au CA racine (HARICA TLS RSA Root CA 2021).
+Le fichier est monté dans le conteneur via le volume défini dans `docker-compose.yml`, et `LDAP_TLS_CA_CERT` pointe vers son emplacement à l'intérieur du conteneur.
 
-> **Note** : la commande `| openssl x509` qu'on trouve souvent en ligne n'extrait que le premier certificat (le serveur), pas le CA racine. C'est une erreur courante qui provoque un `Can't contact LDAP server` même avec `LDAP_TLS_CA_CERT` renseigné.
-
-En pratique, on a eu des difficultés à faire fonctionner la vérification TLS (voir section 6.5) et on a utilisé `LDAP_TLS_INSECURE=true` (option acceptable en développement). Le fichier `ul-ca.crt` est tout de même monté dans le conteneur via le volume défini dans `docker-compose.yml`, et `LDAP_TLS_CA_CERT` pointe vers son emplacement à l'intérieur du conteneur.
+> **Note** : la commande `openssl s_client -showcerts` n'affiche que les certificats envoyés par le serveur (GEANT + serveur, pas HARICA). Utiliser `| openssl x509` ou `awk` sur cette sortie ne donnera pas le bon CA racine. Voir section 6.6 pour le détail des difficultés rencontrées.
 
 ---
 
@@ -605,8 +602,7 @@ Le tableau ci-dessous explique les choix faits pour chaque variable :
 | `LDAP_ID_ATTRIBUTE` | `sAMAccountName` | Identifiant textuel stable dans AD, sans problème de décodage binaire |
 | `LDAP_EMAIL_ATTRIBUTE` | `mail` | Récupère le mail UL pour le profil BookStack |
 | `LDAP_DISPLAY_NAME_ATTRIBUTE` | `displayName` | Nom affiché dans l'interface |
-| `LDAP_TLS_CA_CERT` | `/config/ul-ca.crt` | Chemin du certificat CA à l'intérieur du conteneur |
-| `LDAP_TLS_INSECURE` | `true` | Désactive la vérification de la chaîne TLS (voir section 6.5) |
+| `LDAP_TLS_CA_CERT` | `/config/ul-ca.crt` | Chemin du certificat CA HARICA à l'intérieur du conteneur |
 
 ### 6.3 Certificat TLS
 
@@ -639,7 +635,7 @@ Pour se connecter : ouvrir `http://localhost:6875` et saisir son **login UL** (l
 
 3. **Format UPN pour le bind** — même constat qu'à l'étape 2 (voir section 3.1). Format `login@etu.univ-lorraine.fr` pour les étudiants.
 
-4. **Certificat TLS incomplet** — `openssl x509` n'extrait que le premier certificat de la chaîne (le certificat serveur), pas les CA intermédiaires. Le conteneur linuxserver ne contient pas HARICA dans son bundle de confiance, donc la vérification TLS échouait avec `Can't contact LDAP server`. Pour débloquer la situation, on a utilisé `LDAP_TLS_INSECURE=true` qui désactive la vérification de la chaîne. Ce n'est pas idéal en production, mais acceptable dans ce contexte de TP.
+4. **Certificat TLS incomplet** — `openssl x509` n'extrait que le premier certificat de la chaîne (le certificat serveur), pas les CA intermédiaires. Le conteneur linuxserver ne contient pas HARICA dans son bundle de confiance, donc la vérification TLS échouait avec `Can't contact LDAP server`. Solution : télécharger le certificat racine HARICA (`HARICA-TLS-Root-2021-RSA.pem`) depuis le site de HARICA et le placer dans `bookstack/ul-ca.crt`. La variable `LDAP_TLS_CA_CERT` pointe vers ce fichier monté dans le conteneur.
 
 5. **Placeholder `{user}` mal documenté** — La cause principale de l'échec d'authentification (`Ces informations ne correspondent à aucun compte`) était un mauvais placeholder dans le filtre LDAP. On avait écrit `$${input}` en pensant que c'était la convention BookStack, alors que le bon placeholder est `{user}` (donc `$${user}` dans le YAML pour échapper le `$`). Avec le mauvais placeholder, BookStack cherchait littéralement `sAMAccountName=${input}` dans l'annuaire et ne trouvait personne, sans retourner d'erreur claire.
 
@@ -801,11 +797,9 @@ cd bookstack/
 # 1. Vérifier la connectivité vers les serveurs LDAP
 nc -zv montet-dc1.ad.univ-lorraine.fr 636 -w 5
 
-# 2. Extraire le CA racine et l'écrire directement dans ul-ca.crt
-openssl s_client -connect montet-dc1.ad.univ-lorraine.fr:636 \
-  -showcerts </dev/null 2>/dev/null \
-  | awk '/-----BEGIN CERTIFICATE-----/{s=$0; next} s{s=s"\n"$0} /-----END CERTIFICATE-----/{last=s} END{print last}' \
-  > bookstack/ul-ca.crt
+# 2. Placer le certificat HARICA dans bookstack/ul-ca.crt
+# Télécharger "HARICA TLS RSA Root CA 2021" (HARICA-TLS-Root-2021-RSA.pem) depuis harica.gr
+cp HARICA-TLS-Root-2021-RSA.pem bookstack/ul-ca.crt
 
 # 3. Renseigner dans .env :
 #    LDAP_DN=votre_login@etu.univ-lorraine.fr  (étudiant)

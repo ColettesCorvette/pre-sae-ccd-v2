@@ -486,6 +486,17 @@ L'application retenue est **BookStack**, une plateforme de wiki et documentation
 
 On la déploie via Docker : un conteneur BookStack + un conteneur MariaDB, orchestrés avec `docker compose`. La config LDAP pour le raccordement à l'UL fait l'objet d'une étape séparée.
 
+**Répartition des tâches :**
+
+| Sous-étape | Responsable |
+|---|---|
+| 3.1 — Prise en main de BookStack | Thomas |
+| 3.2 — Déploiement avec Docker | Thomas |
+| 3.3 — Préparation du raccordement LDAP (certificat TLS, accès réseau) | Alexandre |
+| 3.4 — Configuration et test du raccordement LDAP | Doryan |
+| 3.5 — Bonus (filtrage par appartenance, gestion des rôles) | Alexandre |
+| Debug général | Thomas |
+
 ### 5.2 Déploiement de la pile
 
 Le fichier `bookstack/docker-compose.yml` lance les deux services. Il faut d'abord créer le `.env` :
@@ -543,14 +554,16 @@ depth=0  nancy-dc2.ad.univ-lorraine.fr (serveur)
 
 Bonne nouvelle : ce n'est pas une CA interne à l'UL — c'est HARICA/GEANT, une autorité de certification académique publique reconnue. La vérification retourne `Verify return code: 0 (ok)`, ce qui veut dire que le certificat est déjà considéré valide par le système.
 
-Pour récupérer la chaîne complète de certificats :
+Pour extraire automatiquement le CA racine (dernier bloc de la chaîne) et l'écrire directement dans le fichier :
 
 ```bash
 openssl s_client -connect montet-dc1.ad.univ-lorraine.fr:636 \
-  -showcerts </dev/null 2>/dev/null
+  -showcerts </dev/null 2>/dev/null \
+  | awk '/-----BEGIN CERTIFICATE-----/{s=$0; next} s{s=s"\n"$0} /-----END CERTIFICATE-----/{last=s} END{print last}' \
+  > bookstack/ul-ca.crt
 ```
 
-Plusieurs blocs `-----BEGIN CERTIFICATE-----` s'affichent : le certificat serveur, les intermédiaires, et la racine. Pour que BookStack fasse confiance au serveur, il faut copier **le dernier bloc** (le CA racine, ici HARICA TLS RSA Root CA 2021) dans un fichier `ul-ca.crt`.
+La commande affiche toute la chaîne (serveur → intermédiaires → racine). Le `awk` isole chaque bloc et conserve le dernier, qui correspond au CA racine (HARICA TLS RSA Root CA 2021).
 
 > **Note** : la commande `| openssl x509` qu'on trouve souvent en ligne n'extrait que le premier certificat (le serveur), pas le CA racine. C'est une erreur courante qui provoque un `Can't contact LDAP server` même avec `LDAP_TLS_CA_CERT` renseigné.
 
@@ -613,13 +626,17 @@ docker compose logs -f bookstack
 
 Pour se connecter : ouvrir `http://localhost:6875` et saisir son **login UL** (la partie avant le @) et son mot de passe UL. BookStack crée automatiquement le profil avec le nom et le mail récupérés depuis l'annuaire.
 
-### 6.5 Difficultés rencontrées
+### 6.5 Résultat
+
+![Profil BookStack après connexion LDAP UL — nom, mail et login récupérés depuis l'annuaire](bookstack/infos-annuaire.png)
+
+### 6.6 Difficultés rencontrées
 
 1. **AUTH_METHOD=ldap bloque le compte admin** — Une fois activé, le login admin par email ne fonctionne plus. Si le LDAP est indisponible ou mal configuré, l'accès est totalement impossible. On a galéré là-dessus en oubliant de relancer la pile après avoir renseigné les credentials LDAP.
 
-2. **Base DN des étudiants** — Le sujet donne `OU=Personnels` comme Base DN, mais les comptes étudiants ne s'y trouvent pas — même constat qu'à l'étape 2. On a utilisé `OU=_Utilisateurs` à la place.
+2. **Base DN des étudiants** — même constat qu'à l'étape 2 (voir section 3.2). On a utilisé `OU=_Utilisateurs` à la place de `OU=Personnels`.
 
-3. **Format UPN pour le bind** — L'AD de l'UL attend `login@etu.univ-lorraine.fr` pour le bind, pas un DN classique `cn=...,dc=...` comme sur forumsys.
+3. **Format UPN pour le bind** — même constat qu'à l'étape 2 (voir section 3.1). Format `login@etu.univ-lorraine.fr` pour les étudiants.
 
 4. **Certificat TLS incomplet** — `openssl x509` n'extrait que le premier certificat de la chaîne (le certificat serveur), pas les CA intermédiaires. Le conteneur linuxserver ne contient pas HARICA dans son bundle de confiance, donc la vérification TLS échouait avec `Can't contact LDAP server`. Pour débloquer la situation, on a utilisé `LDAP_TLS_INSECURE=true` qui désactive la vérification de la chaîne. Ce n'est pas idéal en production, mais acceptable dans ce contexte de TP.
 
@@ -765,10 +782,11 @@ cd bookstack/
 # 1. Vérifier la connectivité vers les serveurs LDAP
 nc -zv montet-dc1.ad.univ-lorraine.fr 636 -w 5
 
-# 2. Récupérer la chaîne de certificats et copier le dernier bloc (CA racine) dans ul-ca.crt
+# 2. Extraire le CA racine et l'écrire directement dans ul-ca.crt
 openssl s_client -connect montet-dc1.ad.univ-lorraine.fr:636 \
-  -showcerts </dev/null 2>/dev/null
-# Copier le dernier bloc -----BEGIN CERTIFICATE----- dans bookstack/ul-ca.crt
+  -showcerts </dev/null 2>/dev/null \
+  | awk '/-----BEGIN CERTIFICATE-----/{s=$0; next} s{s=s"\n"$0} /-----END CERTIFICATE-----/{last=s} END{print last}' \
+  > bookstack/ul-ca.crt
 
 # 3. Renseigner dans .env :
 #    LDAP_DN=votre_login@etu.univ-lorraine.fr  (étudiant)

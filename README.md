@@ -543,14 +543,18 @@ depth=0  nancy-dc2.ad.univ-lorraine.fr (serveur)
 
 Bonne nouvelle : ce n'est pas une CA interne à l'UL — c'est HARICA/GEANT, une autorité de certification académique publique reconnue. La vérification retourne `Verify return code: 0 (ok)`, ce qui veut dire que le certificat est déjà considéré valide par le système.
 
-Pour extraire le certificat et le placer dans `bookstack/` :
+Pour récupérer la chaîne complète de certificats :
 
 ```bash
 openssl s_client -connect montet-dc1.ad.univ-lorraine.fr:636 \
-  </dev/null 2>/dev/null | openssl x509 -out bookstack/ul-ca.crt
+  -showcerts </dev/null 2>/dev/null
 ```
 
-Le fichier `ul-ca.crt` est monté dans le conteneur via le volume défini dans `docker-compose.yml`. La variable `LDAP_TLS_CA_CERT` pointe vers son emplacement à l'intérieur du conteneur.
+Plusieurs blocs `-----BEGIN CERTIFICATE-----` s'affichent : le certificat serveur, les intermédiaires, et la racine. Pour que BookStack fasse confiance au serveur, il faut copier **le dernier bloc** (le CA racine, ici HARICA TLS RSA Root CA 2021) dans un fichier `ul-ca.crt`.
+
+> **Note** : la commande `| openssl x509` qu'on trouve souvent en ligne n'extrait que le premier certificat (le serveur), pas le CA racine. C'est une erreur courante qui provoque un `Can't contact LDAP server` même avec `LDAP_TLS_CA_CERT` renseigné.
+
+En pratique, on a eu des difficultés à faire fonctionner la vérification TLS (voir section 6.5) et on a utilisé `LDAP_TLS_INSECURE=true` (option acceptable en développement). Le fichier `ul-ca.crt` est tout de même monté dans le conteneur via le volume défini dans `docker-compose.yml`, et `LDAP_TLS_CA_CERT` pointe vers son emplacement à l'intérieur du conteneur.
 
 ---
 
@@ -583,15 +587,16 @@ Le tableau ci-dessous explique les choix faits pour chaque variable :
 | `LDAP_SERVER` | `ldaps://montet-dc1.ad.univ-lorraine.fr:636` | Serveur AD de l'UL en LDAPS |
 | `LDAP_BASE_DN` | `OU=_Utilisateurs,OU=UL,DC=ad,DC=univ-lorraine,DC=fr` | Branche large qui couvre étudiants et personnels (voir étape 2) |
 | `LDAP_DN` | `login@etu.univ-lorraine.fr` | Format UPN — spécificité Active Directory |
-| `LDAP_USER_FILTER` | `(&(objectClass=user)(sAMAccountName=${input}))` | L'utilisateur saisit son login UL (la partie avant le @) |
-| `LDAP_ID_ATTRIBUTE` | `objectGUID` | Identifiant stable dans AD — évite les doublons si un login change |
+| `LDAP_USER_FILTER` | `(&(objectClass=user)(sAMAccountName={user}))` | `{user}` est remplacé par le login saisi. Dans le YAML, s'écrit `$${user}` pour échapper le `$` |
+| `LDAP_ID_ATTRIBUTE` | `sAMAccountName` | Identifiant textuel stable dans AD, sans problème de décodage binaire |
 | `LDAP_EMAIL_ATTRIBUTE` | `mail` | Récupère le mail UL pour le profil BookStack |
 | `LDAP_DISPLAY_NAME_ATTRIBUTE` | `displayName` | Nom affiché dans l'interface |
 | `LDAP_TLS_CA_CERT` | `/config/ul-ca.crt` | Chemin du certificat CA à l'intérieur du conteneur |
+| `LDAP_TLS_INSECURE` | `true` | Désactive la vérification de la chaîne TLS (voir section 6.5) |
 
 ### 6.3 Certificat TLS
 
-Voir section 5.5 pour l'extraction du certificat. Il est monté dans le conteneur via `./ul-ca.crt:/config/www/ul-ca.crt` dans les volumes du service `bookstack`.
+Voir section 5.5 pour l'extraction du certificat. Il est monté dans le conteneur via `./ul-ca.crt:/config/ul-ca.crt` dans les volumes du service `bookstack`.
 
 ### 6.4 Lancement
 
@@ -616,7 +621,11 @@ Pour se connecter : ouvrir `http://localhost:6875` et saisir son **login UL** (l
 
 3. **Format UPN pour le bind** — L'AD de l'UL attend `login@etu.univ-lorraine.fr` pour le bind, pas un DN classique `cn=...,dc=...` comme sur forumsys.
 
-4. **`$${input}` dans le YAML** — `${input}` est un placeholder interne à BookStack. Dans un `docker-compose.yml`, il faut l'écrire `$${input}` pour que Docker ne cherche pas à le résoudre comme une variable d'environnement.
+4. **Certificat TLS incomplet** — `openssl x509` n'extrait que le premier certificat de la chaîne (le certificat serveur), pas les CA intermédiaires. Le conteneur linuxserver ne contient pas HARICA dans son bundle de confiance, donc la vérification TLS échouait avec `Can't contact LDAP server`. Pour débloquer la situation, on a utilisé `LDAP_TLS_INSECURE=true` qui désactive la vérification de la chaîne. Ce n'est pas idéal en production, mais acceptable dans ce contexte de TP.
+
+5. **Placeholder `{user}` mal documenté** — La cause principale de l'échec d'authentification (`Ces informations ne correspondent à aucun compte`) était un mauvais placeholder dans le filtre LDAP. On avait écrit `$${input}` en pensant que c'était la convention BookStack, alors que le bon placeholder est `{user}` (donc `$${user}` dans le YAML pour échapper le `$`). Avec le mauvais placeholder, BookStack cherchait littéralement `sAMAccountName=${input}` dans l'annuaire et ne trouvait personne, sans retourner d'erreur claire.
+
+6. **Logs Laravel introuvables** — Le débogage a été compliqué par le fait que les logs de l'application ne se trouvent pas dans `/config/log/bookstack/` comme on pourrait s'y attendre avec l'image linuxserver. Le fichier `/var/www/bookstack/storage/logs/laravel.log` existe comme symlink mais pointe vers une cible inexistante, ce qui fait que les erreurs Laravel sont silencieusement perdues. On a dû s'appuyer sur `LDAP_DUMP_USER_DETAILS=true` (qui affiche les données LDAP directement dans le navigateur) pour avancer.
 
 ---
 
@@ -722,9 +731,10 @@ cd bookstack/
 # 1. Vérifier la connectivité vers les serveurs LDAP
 nc -zv montet-dc1.ad.univ-lorraine.fr 636 -w 5
 
-# 2. Générer le certificat TLS
+# 2. Récupérer la chaîne de certificats et copier le dernier bloc (CA racine) dans ul-ca.crt
 openssl s_client -connect montet-dc1.ad.univ-lorraine.fr:636 \
-  </dev/null 2>/dev/null | openssl x509 -out ul-ca.crt
+  -showcerts </dev/null 2>/dev/null
+# Copier le dernier bloc -----BEGIN CERTIFICATE----- dans bookstack/ul-ca.crt
 
 # 3. Renseigner dans .env :
 #    LDAP_DN=votre_login@etu.univ-lorraine.fr  (étudiant)

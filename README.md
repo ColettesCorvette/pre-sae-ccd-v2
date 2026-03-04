@@ -486,6 +486,17 @@ L'application retenue est **BookStack**, une plateforme de wiki et documentation
 
 On la déploie via Docker : un conteneur BookStack + un conteneur MariaDB, orchestrés avec `docker compose`. La config LDAP pour le raccordement à l'UL fait l'objet d'une étape séparée.
 
+**Répartition des tâches :**
+
+| Sous-étape | Responsable |
+|---|---|
+| 3.1 — Prise en main de BookStack | Thomas |
+| 3.2 — Déploiement avec Docker | Thomas |
+| 3.3 — Préparation du raccordement LDAP (certificat TLS, accès réseau) | Alexandre |
+| 3.4 — Configuration et test du raccordement LDAP | Doryan |
+| 3.5 — Bonus (filtrage par appartenance, gestion des rôles) | Alexandre |
+| Debug général | Thomas |
+
 ### 5.2 Déploiement de la pile
 
 Le fichier `bookstack/docker-compose.yml` lance les deux services. Il faut d'abord créer le `.env` :
@@ -623,9 +634,9 @@ Pour se connecter : ouvrir `http://localhost:6875` et saisir son **login UL** (l
 
 1. **AUTH_METHOD=ldap bloque le compte admin** — Une fois activé, le login admin par email ne fonctionne plus. Si le LDAP est indisponible ou mal configuré, l'accès est totalement impossible. On a galéré là-dessus en oubliant de relancer la pile après avoir renseigné les credentials LDAP.
 
-2. **Base DN des étudiants** — Le sujet donne `OU=Personnels` comme Base DN, mais les comptes étudiants ne s'y trouvent pas — même constat qu'à l'étape 2. On a utilisé `OU=_Utilisateurs` à la place.
+2. **Base DN des étudiants** — même constat qu'à l'étape 2 (voir section 3.2). On a utilisé `OU=_Utilisateurs` à la place de `OU=Personnels`.
 
-3. **Format UPN pour le bind** — L'AD de l'UL attend `login@etu.univ-lorraine.fr` pour le bind, pas un DN classique `cn=...,dc=...` comme sur forumsys.
+3. **Format UPN pour le bind** — même constat qu'à l'étape 2 (voir section 3.1). Format `login@etu.univ-lorraine.fr` pour les étudiants.
 
 4. **Certificat TLS incomplet** — `openssl x509` n'extrait que le premier certificat de la chaîne (le certificat serveur), pas les CA intermédiaires. Le conteneur linuxserver ne contient pas HARICA dans son bundle de confiance, donc la vérification TLS échouait avec `Can't contact LDAP server`. Pour débloquer la situation, on a utilisé `LDAP_TLS_INSECURE=true` qui désactive la vérification de la chaîne. Ce n'est pas idéal en production, mais acceptable dans ce contexte de TP.
 

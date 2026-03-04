@@ -18,7 +18,7 @@ services:
       - LDAP_DN=${LDAP_DN}
       - LDAP_PASS=${LDAP_PASS}
       # {user} est le placeholder BookStack pour le login saisi. Le $$ est nécessaire pour échapper le $ dans docker-compose
-      - LDAP_USER_FILTER=(&(objectClass=user)(sAMAccountName=$${user}))
+      - LDAP_USER_FILTER=(&(objectClass=user)(sAMAccountName=$${user})(memberOf=CN=GGA_GR_app_info_infra_vpn_iutnc-etudiants,OU=UDLGroup,OU=_Groupes,OU=UL,DC=ad,DC=univ-lorraine,DC=fr))
       - LDAP_USER_TO_GROUPS=true
       - LDAP_GROUP_ATTRIBUTE=memberOf
       - LDAP_ID_ATTRIBUTE=sAMAccountName

@@ -543,14 +543,16 @@ depth=0  nancy-dc2.ad.univ-lorraine.fr (serveur)
 
 Bonne nouvelle : ce n'est pas une CA interne à l'UL — c'est HARICA/GEANT, une autorité de certification académique publique reconnue. La vérification retourne `Verify return code: 0 (ok)`, ce qui veut dire que le certificat est déjà considéré valide par le système.
 
-Pour récupérer la chaîne complète de certificats :
+Pour extraire automatiquement le CA racine (dernier bloc de la chaîne) et l'écrire directement dans le fichier :
 
 ```bash
 openssl s_client -connect montet-dc1.ad.univ-lorraine.fr:636 \
-  -showcerts </dev/null 2>/dev/null
+  -showcerts </dev/null 2>/dev/null \
+  | awk '/-----BEGIN CERTIFICATE-----/{s=$0; next} s{s=s"\n"$0} /-----END CERTIFICATE-----/{last=s} END{print last}' \
+  > bookstack/ul-ca.crt
 ```
 
-Plusieurs blocs `-----BEGIN CERTIFICATE-----` s'affichent : le certificat serveur, les intermédiaires, et la racine. Pour que BookStack fasse confiance au serveur, il faut copier **le dernier bloc** (le CA racine, ici HARICA TLS RSA Root CA 2021) dans un fichier `ul-ca.crt`.
+La commande affiche toute la chaîne (serveur → intermédiaires → racine). Le `awk` isole chaque bloc et conserve le dernier, qui correspond au CA racine (HARICA TLS RSA Root CA 2021).
 
 > **Note** : la commande `| openssl x509` qu'on trouve souvent en ligne n'extrait que le premier certificat (le serveur), pas le CA racine. C'est une erreur courante qui provoque un `Can't contact LDAP server` même avec `LDAP_TLS_CA_CERT` renseigné.
 
@@ -613,7 +615,11 @@ docker compose logs -f bookstack
 
 Pour se connecter : ouvrir `http://localhost:6875` et saisir son **login UL** (la partie avant le @) et son mot de passe UL. BookStack crée automatiquement le profil avec le nom et le mail récupérés depuis l'annuaire.
 
-### 6.5 Difficultés rencontrées
+### 6.5 Résultat
+
+![Profil BookStack après connexion LDAP UL — nom, mail et login récupérés depuis l'annuaire](bookstack/infos-annuaire.png)
+
+### 6.6 Difficultés rencontrées
 
 1. **AUTH_METHOD=ldap bloque le compte admin** — Une fois activé, le login admin par email ne fonctionne plus. Si le LDAP est indisponible ou mal configuré, l'accès est totalement impossible. On a galéré là-dessus en oubliant de relancer la pile après avoir renseigné les credentials LDAP.
 
@@ -731,10 +737,11 @@ cd bookstack/
 # 1. Vérifier la connectivité vers les serveurs LDAP
 nc -zv montet-dc1.ad.univ-lorraine.fr 636 -w 5
 
-# 2. Récupérer la chaîne de certificats et copier le dernier bloc (CA racine) dans ul-ca.crt
+# 2. Extraire le CA racine et l'écrire directement dans ul-ca.crt
 openssl s_client -connect montet-dc1.ad.univ-lorraine.fr:636 \
-  -showcerts </dev/null 2>/dev/null
-# Copier le dernier bloc -----BEGIN CERTIFICATE----- dans bookstack/ul-ca.crt
+  -showcerts </dev/null 2>/dev/null \
+  | awk '/-----BEGIN CERTIFICATE-----/{s=$0; next} s{s=s"\n"$0} /-----END CERTIFICATE-----/{last=s} END{print last}' \
+  > bookstack/ul-ca.crt
 
 # 3. Renseigner dans .env :
 #    LDAP_DN=votre_login@etu.univ-lorraine.fr  (étudiant)

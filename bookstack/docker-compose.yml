@@ -9,15 +9,11 @@ services:
       - DB_PASSWORD=${DB_PASS}
       - DB_DATABASE=${DB_DATABASE}
       - APP_KEY=${APP_KEY}
-      # LDAP — raccordement au LDAP de l'Université de Lorraine (étape 4)
       - AUTH_METHOD=ldap
       - LDAP_SERVER=ldaps://montet-dc1.ad.univ-lorraine.fr:636
-      # Base DN élargi pour couvrir les comptes étudiants (OU=Personnels ne contient que les personnels)
       - LDAP_BASE_DN=OU=_Utilisateurs,OU=UL,DC=ad,DC=univ-lorraine,DC=fr
-      # LDAP_DN au format UPN : login@etu.univ-lorraine.fr pour les étudiants, login@univ-lorraine.fr pour les personnels
       - LDAP_DN=${LDAP_DN}
       - LDAP_PASS=${LDAP_PASS}
-      # {user} est le placeholder BookStack pour le login saisi. Le $$ est nécessaire pour échapper le $ dans docker-compose
       - LDAP_USER_FILTER=(&(objectClass=user)(sAMAccountName=$${user})(memberOf=CN=GGA_GR_app_info_infra_vpn_iutnc-etudiants,OU=UDLGroup,OU=_Groupes,OU=UL,DC=ad,DC=univ-lorraine,DC=fr))
       - LDAP_USER_TO_GROUPS=true
       - LDAP_GROUP_ATTRIBUTE=memberOf
@@ -26,7 +22,6 @@ services:
       - LDAP_DISPLAY_NAME_ATTRIBUTE=displayName
       - LDAP_VERSION=3
       - LDAP_TLS_CA_CERT=/config/ul-ca.crt
-     # - LDAP_DUMP_USER_DETAILS=true
       - APP_DEBUG=true
     volumes:
       - bookstack_data:/config
